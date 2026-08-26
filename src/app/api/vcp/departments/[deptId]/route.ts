@@ -74,24 +74,24 @@ export async function GET(req: Request, { params }: { params: { deptId: string }
         from vcp_targets vt join vcp_initiatives vi on vi.id = vt.initiative_id
         where vt.fiscal_year_id = ${fy} and vt.department_id = ${deptId}
         order by vi.sort_order
-      ` as Promise<{ initiative_id: string; initiative_name: string; target_cents: number; locked: boolean; set_by_name: string | null; set_at: string | null }[]>,
+      ` as unknown as Promise<{ initiative_id: string; initiative_name: string; target_cents: number; locked: boolean; set_by_name: string | null; set_at: string | null }[]>,
       sql`
         select id, file_name, row_count, state, uploaded_by_name, uploaded_at, approved_by_name, approved_at, reject_note
         from vcp_uploads
         where fiscal_year_id = ${fy} and department_id = ${deptId} and superseded_by is null and state in ('review', 'locked')
         limit 1
-      ` as Promise<{ id: string; file_name: string; row_count: number; state: string; uploaded_by_name: string; uploaded_at: string; approved_by_name: string | null; approved_at: string | null; reject_note: string | null }[]>,
+      ` as unknown as Promise<{ id: string; file_name: string; row_count: number; state: string; uploaded_by_name: string; uploaded_at: string; approved_by_name: string | null; approved_at: string | null; reject_note: string | null }[]>,
       sql`
         select id, version, file_name, row_count, validated_subtotal_cents, state, uploaded_by_name, uploaded_at, approved_by_name, approved_at, note
         from vcp_validations
         where fiscal_year_id = ${fy} and department_id = ${deptId}
         order by version desc
-      ` as Promise<{ id: string; version: number; file_name: string; row_count: number; validated_subtotal_cents: number; state: string; uploaded_by_name: string; uploaded_at: string; approved_by_name: string | null; approved_at: string | null; note: string | null }[]>,
+      ` as unknown as Promise<{ id: string; version: number; file_name: string; row_count: number; validated_subtotal_cents: number; state: string; uploaded_by_name: string; uploaded_at: string; approved_by_name: string | null; approved_at: string | null; note: string | null }[]>,
       sql`
         select at, actor_name, action, from_state, to_state, note
         from audit_log where department_id = ${deptId}
         order by at desc limit 200
-      ` as Promise<{ at: string; actor_name: string; action: string; from_state: string | null; to_state: string | null; note: string | null }[]>,
+      ` as unknown as Promise<{ at: string; actor_name: string; action: string; from_state: string | null; to_state: string | null; note: string | null }[]>,
     ]);
 
     const upload = uploadRows[0];
@@ -104,10 +104,10 @@ export async function GET(req: Request, { params }: { params: { deptId: string }
             from vcp_upload_rows r join vcp_initiatives vi on vi.id = r.initiative_id
             where r.upload_id = ${upload.id}
             order by r.row_no
-          ` as Promise<RawLineRow[]>)
+          ` as unknown as Promise<RawLineRow[]>)
         : Promise.resolve([] as RawLineRow[]),
       upload
-        ? (sql`select id, file_name, size_bytes, uploaded_by, uploaded_at from vcp_evidence where upload_id = ${upload.id}` as Promise<
+        ? (sql`select id, file_name, size_bytes, uploaded_by, uploaded_at from vcp_evidence where upload_id = ${upload.id}` as unknown as Promise<
             { id: string; file_name: string; size_bytes: number | null; uploaded_by: string | null; uploaded_at: string }[]
           >)
         : Promise.resolve([]),
@@ -117,7 +117,7 @@ export async function GET(req: Request, { params }: { params: { deptId: string }
             from vcp_validation_rows r join vcp_initiatives vi on vi.id = r.initiative_id
             where r.validation_id = any(${validationIds}::uuid[])
             order by r.row_no
-          ` as Promise<(RawValidationLineRow & { validation_id: string })[]>)
+          ` as unknown as Promise<(RawValidationLineRow & { validation_id: string })[]>)
         : Promise.resolve([]),
     ]);
 

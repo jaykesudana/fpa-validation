@@ -54,19 +54,19 @@ export async function loadDepartmentsForCalc(fy: string, deptIds: readonly strin
       select department_id, initiative_id, target_cents, locked
       from vcp_targets
       where fiscal_year_id = ${fy} and department_id = any(${ids}::text[])
-    ` as Promise<TargetRow[]>,
+    ` as unknown as Promise<TargetRow[]>,
     sql`
       select id, department_id, state
       from vcp_uploads
       where fiscal_year_id = ${fy} and department_id = any(${ids}::text[])
         and superseded_by is null and state in ('review', 'locked')
-    ` as Promise<UploadRow[]>,
+    ` as unknown as Promise<UploadRow[]>,
     sql`
       select id, department_id, version, state, validated_subtotal_cents
       from vcp_validations
       where fiscal_year_id = ${fy} and department_id = any(${ids}::text[])
       order by department_id, version
-    ` as Promise<ValidationRowMeta[]>,
+    ` as unknown as Promise<ValidationRowMeta[]>,
   ]);
 
   const uploadIds = uploads.map((u) => u.id);
@@ -78,14 +78,14 @@ export async function loadDepartmentsForCalc(fy: string, deptIds: readonly strin
           select upload_id as parent_id, initiative_id, category, frequency, identified_cents
           from vcp_upload_rows
           where upload_id = any(${uploadIds}::uuid[])
-        ` as Promise<LineRowRaw[]>)
+        ` as unknown as Promise<LineRowRaw[]>)
       : Promise.resolve([] as LineRowRaw[]),
     validationIds.length
       ? (sql`
           select validation_id as parent_id, initiative_id, category, frequency, identified_cents, status, validated_cents
           from vcp_validation_rows
           where validation_id = any(${validationIds}::uuid[])
-        ` as Promise<ValidationLineRowRaw[]>)
+        ` as unknown as Promise<ValidationLineRowRaw[]>)
       : Promise.resolve([] as ValidationLineRowRaw[]),
   ]);
 

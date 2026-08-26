@@ -40,8 +40,8 @@ export async function POST(req: Request) {
       sql`
         select id from vcp_uploads
         where fiscal_year_id = ${fy} and department_id = ${deptId} and state = 'locked' and superseded_by is null
-      ` as Promise<{ id: string }[]>,
-      sql`select id, name from vcp_initiatives where active = true` as Promise<Initiative[]>,
+      ` as unknown as Promise<{ id: string }[]>,
+      sql`select id, name from vcp_initiatives where active = true` as unknown as Promise<Initiative[]>,
     ]);
 
     const baseline = baselineRows[0];

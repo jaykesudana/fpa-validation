@@ -56,10 +56,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     });
 
     const [bucketRows, allRequestRows] = await Promise.all([
-      sql`select total_cents, reserve_cents from inv_bucket where fiscal_year_id = ${request.fiscal_year_id}` as Promise<
+      sql`select total_cents, reserve_cents from inv_bucket where fiscal_year_id = ${request.fiscal_year_id}` as unknown as Promise<
         { total_cents: number; reserve_cents: number }[]
       >,
-      sql`select status, amount_cents, approved_amount_cents from inv_requests where fiscal_year_id = ${request.fiscal_year_id}` as Promise<
+      sql`select status, amount_cents, approved_amount_cents from inv_requests where fiscal_year_id = ${request.fiscal_year_id}` as unknown as Promise<
         { status: ReqStatus; amount_cents: number; approved_amount_cents: number | null }[]
       >,
     ]);

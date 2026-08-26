@@ -69,7 +69,7 @@ export async function GET(req: Request) {
         ? (sql`
             select department_id, approved_cents, pending_cents, approved_count, pending_count
             from v_inv_dept_rollup where fiscal_year_id = ${fy} and department_id = any(${invVisibleIds}::text[])
-          ` as Promise<InvRollupRow[]>)
+          ` as unknown as Promise<InvRollupRow[]>)
         : Promise.resolve([] as InvRollupRow[]),
     ]);
     const invRollupMap = new Map(invRollupRows.map((r) => [r.department_id, r]));
@@ -134,8 +134,8 @@ export async function GET(req: Request) {
 
     // By-initiative lens — scoped by the same visibleDepts as above.
     const [vcpInitiatives, invInitiatives] = await Promise.all([
-      sql`select id, name from vcp_initiatives where active = true order by sort_order` as Promise<{ id: string; name: string }[]>,
-      sql`select id, name from inv_initiatives where active = true order by sort_order` as Promise<{ id: string; name: string }[]>,
+      sql`select id, name from vcp_initiatives where active = true order by sort_order` as unknown as Promise<{ id: string; name: string }[]>,
+      sql`select id, name from inv_initiatives where active = true order by sort_order` as unknown as Promise<{ id: string; name: string }[]>,
     ]);
 
     const vcpInitiativeRows = vcpInitiatives.map((init) => {

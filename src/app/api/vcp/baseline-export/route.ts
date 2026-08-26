@@ -23,12 +23,12 @@ export async function GET(req: Request) {
     const sql = db();
 
     const [deptRows, uploadRows, allInitiatives] = await Promise.all([
-      sql`select name from departments where id = ${deptId}` as Promise<{ name: string }[]>,
+      sql`select name from departments where id = ${deptId}` as unknown as Promise<{ name: string }[]>,
       sql`
         select id from vcp_uploads
         where fiscal_year_id = ${fy} and department_id = ${deptId} and state = 'locked' and superseded_by is null
-      ` as Promise<{ id: string }[]>,
-      sql`select id, name from vcp_initiatives where active = true order by sort_order` as Promise<Initiative[]>,
+      ` as unknown as Promise<{ id: string }[]>,
+      sql`select id, name from vcp_initiatives where active = true order by sort_order` as unknown as Promise<Initiative[]>,
     ]);
 
     const deptName = deptRows[0]?.name;

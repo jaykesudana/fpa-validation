@@ -38,10 +38,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     await requireScope({ tower: 'inv', dept: r.department_id });
 
     const [attachmentRows, auditRows] = await Promise.all([
-      sql`select id, file_name, size_bytes, uploaded_at from inv_attachments where request_id = ${id} order by uploaded_at` as Promise<
+      sql`select id, file_name, size_bytes, uploaded_at from inv_attachments where request_id = ${id} order by uploaded_at` as unknown as Promise<
         { id: string; file_name: string; size_bytes: number | null; uploaded_at: string }[]
       >,
-      sql`select at, actor_name, action, note from audit_log where entity_type = 'request' and entity_id = ${id} order by at desc` as Promise<
+      sql`select at, actor_name, action, note from audit_log where entity_type = 'request' and entity_id = ${id} order by at desc` as unknown as Promise<
         { at: string; actor_name: string; action: string; note: string | null }[]
       >,
     ]);

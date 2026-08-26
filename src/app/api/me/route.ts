@@ -12,13 +12,13 @@ export async function GET() {
     const [vcpDeptIds, invDeptIds, fyRows, unreadRows] = await Promise.all([
       getDeptGrants(user, 'vcp'),
       getDeptGrants(user, 'inv'),
-      sql`select id, label from fiscal_years where is_current = true limit 1` as Promise<{ id: string; label: string }[]>,
+      sql`select id, label from fiscal_years where is_current = true limit 1` as unknown as Promise<{ id: string; label: string }[]>,
       sql`
         select tower, count(*)::int as count
         from notifications
         where recipient_id = ${user.id} and read_at is null
         group by tower
-      ` as Promise<{ tower: 'vcp' | 'inv'; count: number }[]>,
+      ` as unknown as Promise<{ tower: 'vcp' | 'inv'; count: number }[]>,
     ]);
 
     const unread = { vcp: 0, inv: 0 };

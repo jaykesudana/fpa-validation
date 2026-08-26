@@ -19,8 +19,8 @@ export async function GET(req: Request) {
 
     const sql = db();
     const [deptRows, allInitiatives, carriedRows] = await Promise.all([
-      sql`select name from departments where id = ${deptId}` as Promise<{ name: string }[]>,
-      sql`select id, name from vcp_initiatives where active = true order by sort_order` as Promise<Initiative[]>,
+      sql`select name from departments where id = ${deptId}` as unknown as Promise<{ name: string }[]>,
+      sql`select id, name from vcp_initiatives where active = true order by sort_order` as unknown as Promise<Initiative[]>,
       // "First carried initiative" isn't an explicit column anywhere in the
       // schema — the catalogue's own sort_order is the least-arbitrary stand-in
       // for "the department's first carried initiative" used in the template
@@ -32,7 +32,7 @@ export async function GET(req: Request) {
         where vt.department_id = ${deptId}
         order by vi.sort_order
         limit 1
-      ` as Promise<{ name: string }[]>,
+      ` as unknown as Promise<{ name: string }[]>,
     ]);
 
     const deptName = deptRows[0]?.name;

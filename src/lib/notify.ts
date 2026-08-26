@@ -47,8 +47,8 @@ export async function notifyDept(input: NotifyDeptInput): Promise<void> {
   const sql = db();
 
   const [grantees, admins] = await Promise.all([
-    sql`select user_id from dept_access where department_id = ${input.deptId} and tower = ${input.tower}` as Promise<{ user_id: string }[]>,
-    sql`select id from users where role = 'admin' and active = true` as Promise<{ id: string }[]>,
+    sql`select user_id from dept_access where department_id = ${input.deptId} and tower = ${input.tower}` as unknown as Promise<{ user_id: string }[]>,
+    sql`select id from users where role = 'admin' and active = true` as unknown as Promise<{ id: string }[]>,
   ]);
 
   const granteeIds = new Set(grantees.map((g) => g.user_id));
@@ -75,8 +75,8 @@ export interface NotifyAllPartnersInput {
 export async function notifyAllPartners(input: NotifyAllPartnersInput): Promise<void> {
   const sql = db();
   const [partners, admins] = await Promise.all([
-    sql`select id from users where role = 'fbp' and active = true` as Promise<{ id: string }[]>,
-    sql`select id from users where role = 'admin' and active = true` as Promise<{ id: string }[]>,
+    sql`select id from users where role = 'fbp' and active = true` as unknown as Promise<{ id: string }[]>,
+    sql`select id from users where role = 'admin' and active = true` as unknown as Promise<{ id: string }[]>,
   ]);
   const partnerIds = new Set(partners.map((p) => p.id));
   const recipients = [

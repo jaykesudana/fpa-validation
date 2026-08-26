@@ -21,14 +21,14 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     const { user } = await requireScope({ tower: 'vcp', dept: validation.department_id });
 
     const [deptRows, allInitiatives, lineRows] = await Promise.all([
-      sql`select name from departments where id = ${validation.department_id}` as Promise<{ name: string }[]>,
-      sql`select id, name from vcp_initiatives where active = true order by sort_order` as Promise<Initiative[]>,
+      sql`select name from departments where id = ${validation.department_id}` as unknown as Promise<{ name: string }[]>,
+      sql`select id, name from vcp_initiatives where active = true order by sort_order` as unknown as Promise<Initiative[]>,
       sql`
         select r.dept_no, r.name, vi.name as initiative_name, r.category, r.ee_id, r.country, r.frequency, r.target_date, r.identified_cents, r.notes, r.status, r.validated_cents, r.validated_date, r.status_update
         from vcp_validation_rows r join vcp_initiatives vi on vi.id = r.initiative_id
         where r.validation_id = ${validationId}
         order by r.row_no
-      ` as Promise<
+      ` as unknown as Promise<
         {
           dept_no: string | null;
           name: string;

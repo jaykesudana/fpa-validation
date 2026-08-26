@@ -19,11 +19,11 @@ export async function GET() {
     const sql = db();
 
     const [departments, vcpInitiatives, invInitiatives] = await Promise.all([
-      sql`select id, name, l1, summary_group as "summaryGroup" from departments where active = true order by sort_order` as Promise<
+      sql`select id, name, l1, summary_group as "summaryGroup" from departments where active = true order by sort_order` as unknown as Promise<
         { id: string; name: string; l1: string; summaryGroup: string }[]
       >,
-      sql`select id, name from vcp_initiatives where active = true order by sort_order` as Promise<{ id: string; name: string }[]>,
-      sql`select id, name from inv_initiatives where active = true order by sort_order` as Promise<{ id: string; name: string }[]>,
+      sql`select id, name from vcp_initiatives where active = true order by sort_order` as unknown as Promise<{ id: string; name: string }[]>,
+      sql`select id, name from inv_initiatives where active = true order by sort_order` as unknown as Promise<{ id: string; name: string }[]>,
     ]);
 
     return NextResponse.json({
