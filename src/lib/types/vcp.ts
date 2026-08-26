@@ -1,4 +1,4 @@
-import type { GateState } from '@/lib/calc/vcp';
+import type { Frequency, GateState, LineStatus } from '@/lib/calc/vcp';
 
 export interface VcpInitiativeTarget {
   initiativeId: string;
@@ -18,14 +18,17 @@ export interface VcpLineRow {
   category: string;
   eeId: string;
   country: string;
-  frequency: string;
+  // The DB column is a real Postgres enum (line_frequency) and bucketRows()
+  // requires this exact union — matching it here (not widening to `string`)
+  // is what let TypeScript catch a real mismatch instead of masking it.
+  frequency: Frequency;
   targetDate: string;
   identifiedCents: number;
   notes: string;
 }
 
 export interface VcpValidationLineRow extends VcpLineRow {
-  status: string;
+  status: LineStatus;
   validatedCents: number;
   validatedDate: string;
   statusUpdate: string;
