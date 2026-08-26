@@ -250,7 +250,12 @@ export default function LineItemsPage() {
   }, [rows]);
 
   const filteredRows = useMemo(() => {
-    return rows.filter((r) => COLUMNS.every((col) => !columnFilters[col.key] || columnFilters[col.key].has(col.get(r))));
+    return rows.filter((r) =>
+      COLUMNS.every((col) => {
+        const filter = columnFilters[col.key];
+        return !filter || filter.has(col.get(r));
+      }),
+    );
   }, [rows, columnFilters]);
 
   const sortedRows = useMemo(() => {
