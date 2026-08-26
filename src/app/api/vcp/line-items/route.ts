@@ -8,6 +8,7 @@ import { resolveFiscalYear } from '@/lib/fiscal-year';
 interface DeptRow {
   id: string;
   name: string;
+  summary_group: string;
 }
 interface UploadRow {
   id: string;
@@ -49,12 +50,13 @@ interface RawValidationRow extends RawRow {
 }
 
 // GET /api/vcp/line-items?fy=… — admin only. Not in 05-API.md; added per a
-// follow-up request for an org-wide, row-level oversight view: "the exact
-// names and lines from a department's Excel templates, consolidated across
-// the org." For each department, shows whichever is the most recently
-// uploaded source of line items — the latest validation version if one
-// exists (labelled with its version number and approval state, whatever
-// that state is), else the current Gate 2 baseline (labelled "Baseline").
+// follow-up request for an org-wide, row-level oversight view. Originally
+// returned only ONE "current" source per department (latest validation, or
+// the baseline if no validation existed yet); extended per a further
+// request to surface Gate 2 (baseline) and Gate 3 (validation) rows
+// SEPARATELY and simultaneously — a department with both shows up under
+// both, tagged via `source`, so admins can compare rather than only seeing
+// whichever is "current".
 export async function GET(req: Request) {
   try {
     const { user } = await requireScope({ role: 'admin' });
@@ -65,7 +67,7 @@ export async function GET(req: Request) {
     const sql = db();
 
     const [depts, uploads, validationMeta] = await Promise.all([
-      sql`select id, name from departments where active = true order by sort_order` as unknown as Promise<DeptRow[]>,
+      sql`select id, name, summary_group from departments where active = true order by sort_order` as unknown as Promise<DeptRow[]>,
       sql`
         select id, department_id, file_name, state, uploaded_by_name, uploaded_at
         from vcp_uploads
@@ -89,8 +91,11 @@ export async function GET(req: Request) {
     const uploadByDept = new Map(uploads.map((u) => [u.department_id, u]));
 
     const validationIdsNeeded = Array.from(latestValidationByDept.values()).map((v) => v.id);
-    const deptsUsingBaseline = depts.filter((d) => !latestValidationByDept.has(d.id) && uploadByDept.has(d.id));
-    const uploadIdsNeeded = deptsUsingBaseline.map((d) => uploadByDept.get(d.id)!.id);
+    // Every department with a baseline upload contributes Gate 2 rows, whether
+    // or not it also has a Gate 3 validation — the two sources are shown
+    // side by side, not one superseding the other.
+    const deptsWithBaseline = depts.filter((d) => uploadByDept.has(d.id));
+    const uploadIdsNeeded = deptsWithBaseline.map((d) => uploadByDept.get(d.id)!.id);
 
     const [validationRows, baselineRows] = await Promise.all([
       validationIdsNeeded.length
@@ -111,14 +116,15 @@ export async function GET(req: Request) {
         : Promise.resolve([] as RawRow[]),
     ]);
 
-    const deptNameById = new Map(depts.map((d) => [d.id, d.name]));
-
-    const fromValidation = Array.from(latestValidationByDept.entries()).flatMap(([deptId, v]) =>
-      validationRows
+    const fromValidation = Array.from(latestValidationByDept.entries()).flatMap(([deptId, v]) => {
+      const dept = depts.find((d) => d.id === deptId);
+      return validationRows
         .filter((r) => r.parent_id === v.id)
         .map((r) => ({
           departmentId: deptId,
-          departmentName: deptNameById.get(deptId) ?? deptId,
+          departmentName: dept?.name ?? deptId,
+          departmentSummaryGroup: dept?.summary_group ?? 'Other',
+          source: 'validation' as const,
           version: `v${v.version}`,
           versionState: v.state,
           sourceFileName: v.file_name,
@@ -140,16 +146,18 @@ export async function GET(req: Request) {
           validatedCents: Number(r.validated_cents),
           validatedDate: r.validated_date ?? '',
           statusUpdate: r.status_update ?? '',
-        })),
-    );
+        }));
+    });
 
-    const fromBaseline = deptsUsingBaseline.flatMap((d) => {
+    const fromBaseline = deptsWithBaseline.flatMap((d) => {
       const upload = uploadByDept.get(d.id)!;
       return baselineRows
         .filter((r) => r.parent_id === upload.id)
         .map((r) => ({
           departmentId: d.id,
           departmentName: d.name,
+          departmentSummaryGroup: d.summary_group,
+          source: 'baseline' as const,
           version: 'Baseline',
           versionState: upload.state,
           sourceFileName: upload.file_name,
@@ -174,7 +182,10 @@ export async function GET(req: Request) {
         }));
     });
 
-    const lineItems = [...fromValidation, ...fromBaseline].sort((a, b) => a.departmentName.localeCompare(b.departmentName) || a.rowNo - b.rowNo);
+    const sourceOrder = { baseline: 0, validation: 1 } as const;
+    const lineItems = [...fromBaseline, ...fromValidation].sort(
+      (a, b) => a.departmentName.localeCompare(b.departmentName) || sourceOrder[a.source] - sourceOrder[b.source] || a.rowNo - b.rowNo,
+    );
 
     return NextResponse.json({ fiscalYear: fy, lineItems, viewerName: user.name });
   } catch (err) {
