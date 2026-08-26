@@ -1,0 +1,14 @@
+@import '../styles/design-tokens.css';
+@import '../styles/ui-kit.css';
+@import '../styles/dashboard.css';
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-width: 1280px; /* desktop-first per 07-UI-SPEC.md §8 — no mobile layout for v1 */
+}
+
+* {
+  box-sizing: border-box;
+}
