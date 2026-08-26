@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/chrome/PageHeader';
+import { BucketAllocationsPanel } from '@/components/investments/BucketAllocationsPanel';
 import { InvStatusChip } from '@/components/ui/InvStatusChip';
 import { api } from '@/lib/api-client';
 import { fmtCents } from '@/lib/calc/format';
@@ -43,6 +44,9 @@ export default function InvestmentsPage() {
   async function saveBucket() {
     if (!bucket) return;
     try {
+      // Edits the GLOBAL pool (poolTotal/reserve) — distinct from the
+      // per-department allocations below, and from `bucket.total`, which is
+      // now scoped to the caller's visible departments.
       await api.put('/api/inv/bucket', {
         fy: bucket.fiscal,
         totalCents: Math.round(Number(totalInput) * 100),
@@ -79,25 +83,25 @@ export default function InvestmentsPage() {
                 className="idc-btn idc-btn--ghost"
                 onClick={() => {
                   setEditingBucket(true);
-                  setTotalInput(String(bucket.total / 100));
+                  setTotalInput(String(bucket.poolTotal / 100));
                   setReserveInput(String(bucket.reserve / 100));
                 }}
               >
-                Edit
+                Edit pool size
               </button>
             )}
           </div>
 
           {bucket.overcommitted && (
             <div className="chip" style={{ color: '#B0560F', background: 'rgba(246,111,19,0.14)', marginBottom: 12 }}>
-              Overcommitted — approved + pending exceeds available.
+              Overcommitted — approved + pending exceeds what's allocated to these departments.
             </div>
           )}
 
           {editingBucket ? (
             <div className="row" style={{ gap: 16 }}>
               <div>
-                <label className="section-label">Total</label>
+                <label className="section-label">Total (company-wide pool)</label>
                 <br />
                 <input type="number" value={totalInput} onChange={(e) => setTotalInput(e.target.value)} />
               </div>
@@ -114,36 +118,40 @@ export default function InvestmentsPage() {
               </button>
             </div>
           ) : (
-            <div className="kpi-strip" style={{ boxShadow: 'none' }}>
-              <div className="kpi-group">
-                <div className="kpi-tile">
-                  <p className="kpi-tile__label">Total</p>
-                  <p className="kpi-tile__value">{fmtCents(bucket.total)}</p>
-                </div>
-                <div className="kpi-tile">
-                  <p className="kpi-tile__label">Reserve</p>
-                  <p className="kpi-tile__value">{fmtCents(bucket.reserve)}</p>
-                </div>
-                <div className="kpi-tile">
-                  <p className="kpi-tile__label">Available</p>
-                  <p className="kpi-tile__value">{fmtCents(bucket.available)}</p>
-                </div>
-                <div className="kpi-tile">
-                  <p className="kpi-tile__label">Approved</p>
-                  <p className="kpi-tile__value">{fmtCents(bucket.approved)}</p>
-                </div>
-                <div className="kpi-tile">
-                  <p className="kpi-tile__label">In flight</p>
-                  <p className="kpi-tile__value">{fmtCents(bucket.pending)}</p>
-                </div>
-                <div className="kpi-tile">
-                  <p className="kpi-tile__label">Unallocated</p>
-                  <p className="kpi-tile__value">{fmtCents(bucket.unallocated)}</p>
+            <>
+              {isAdmin && (
+                <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+                  Company-wide pool {fmtCents(bucket.poolTotal)} · reserve {fmtCents(bucket.reserve)} · pool available to allocate{' '}
+                  {fmtCents(bucket.poolAvailable)} · allocated to departments so far {fmtCents(bucket.allocatedTotal)}
+                </p>
+              )}
+              <div className="kpi-strip" style={{ boxShadow: 'none' }}>
+                <div className="kpi-group">
+                  <div className="kpi-tile">
+                    <p className="kpi-tile__label">Investment pool (visible orgs)</p>
+                    <p className="kpi-tile__value">{fmtCents(bucket.total)}</p>
+                  </div>
+                  <div className="kpi-tile">
+                    <p className="kpi-tile__label">Approved</p>
+                    <p className="kpi-tile__value">{fmtCents(bucket.approved)}</p>
+                  </div>
+                  <div className="kpi-tile">
+                    <p className="kpi-tile__label">In flight</p>
+                    <p className="kpi-tile__value">{fmtCents(bucket.pending)}</p>
+                  </div>
+                  <div className="kpi-tile">
+                    <p className="kpi-tile__label">Unallocated</p>
+                    <p className="kpi-tile__value">{fmtCents(bucket.unallocated)}</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            </>
           )}
         </div>
+      )}
+
+      {!loading && bucket && (
+        <BucketAllocationsPanel fy={bucket.fiscal} allocations={bucket.allocations} isAdmin={isAdmin} onChanged={load} />
       )}
 
       <div className="row--between" style={{ marginBottom: 16 }}>

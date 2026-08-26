@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { rollup, type Bucket, type InvRequest, type ReqStatus } from '@/lib/calc/investments';
+import { rollup, type InvRequest, type ReqStatus } from '@/lib/calc/investments';
 import { db } from '@/lib/db';
 import { toErrorResponse } from '@/lib/auth/http';
 import { requireScope } from '@/lib/auth/scope';
@@ -55,38 +55,34 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       linkRef: request.ref,
     });
 
-    const [bucketRows, allRequestRows] = await Promise.all([
-      sql`select total_cents, reserve_cents from inv_bucket where fiscal_year_id = ${request.fiscal_year_id}` as unknown as Promise<
-        { total_cents: number; reserve_cents: number }[]
-      >,
-      sql`select status, amount_cents, approved_amount_cents from inv_requests where fiscal_year_id = ${request.fiscal_year_id}` as unknown as Promise<
-        { status: ReqStatus; amount_cents: number; approved_amount_cents: number | null }[]
-      >,
+    // Scoped to THIS request's department allocation — not the global pool —
+    // consistent with how Summary/Investments now scope "available" and
+    // "overcommitted" everywhere else (see migrations/0003 and
+    // src/app/api/inv/bucket/route.ts).
+    const [allocationRows, deptRequestRows] = await Promise.all([
+      sql`
+        select allocated_cents from inv_bucket_allocations
+        where fiscal_year_id = ${request.fiscal_year_id} and department_id = ${request.department_id}
+      ` as unknown as Promise<{ allocated_cents: number }[]>,
+      sql`
+        select status, amount_cents, approved_amount_cents from inv_requests
+        where fiscal_year_id = ${request.fiscal_year_id} and department_id = ${request.department_id}
+      ` as unknown as Promise<{ status: ReqStatus; amount_cents: number; approved_amount_cents: number | null }[]>,
     ]);
 
-    let overcommitted: boolean | null = null;
-    let available: number | null = null;
-    let approvedTotal: number | null = null;
-    let pendingTotal: number | null = null;
-    if (bucketRows[0]) {
-      const bucket: Bucket = { totalCents: Number(bucketRows[0].total_cents), reserveCents: Number(bucketRows[0].reserve_cents) };
-      const requests: InvRequest[] = allRequestRows.map((r) => ({
-        status: r.status,
-        amountCents: Number(r.amount_cents),
-        approvedAmountCents: r.approved_amount_cents == null ? null : Number(r.approved_amount_cents),
-      }));
-      const roll = rollup(requests, bucket);
-      overcommitted = roll.overcommitted;
-      available = roll.availableCents;
-      approvedTotal = roll.approvedCents;
-      pendingTotal = roll.pendingCents;
-    }
+    const allocatedCents = allocationRows[0] ? Number(allocationRows[0].allocated_cents) : 0;
+    const deptRequests: InvRequest[] = deptRequestRows.map((r) => ({
+      status: r.status,
+      amountCents: Number(r.amount_cents),
+      approvedAmountCents: r.approved_amount_cents == null ? null : Number(r.approved_amount_cents),
+    }));
+    const roll = rollup(deptRequests, { totalCents: allocatedCents, reserveCents: 0 });
 
     return NextResponse.json({
       ok: true,
       status: 'approved',
       approvedAmountCents,
-      bucket: { available, approved: approvedTotal, pending: pendingTotal, overcommitted },
+      bucket: { available: roll.availableCents, approved: roll.approvedCents, pending: roll.pendingCents, overcommitted: roll.overcommitted },
     });
   } catch (err) {
     return toErrorResponse(err);

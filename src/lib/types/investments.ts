@@ -58,10 +58,23 @@ export interface InvRequestDetail {
   log: { at: string; actorName: string; action: string; note: string | null }[];
 }
 
+export interface BucketAllocation {
+  departmentId: string;
+  departmentName: string;
+  allocatedCents: number;
+}
+
 export interface BucketResponse {
   fiscal: string;
-  total: number;
+  // Global pool figures — the true company-wide numbers, mainly for admins
+  // managing the pool and the per-department allocation.
+  poolTotal: number;
   reserve: number;
+  poolAvailable: number;
+  allocatedTotal: number;
+  // Scoped to the caller's visible departments — what Summary's "Investment
+  // pool" tile and this tab's own KPIs show.
+  total: number;
   available: number;
   approved: number;
   pending: number;
@@ -77,4 +90,5 @@ export interface BucketResponse {
   setByName: string | null;
   setAt: string | null;
   note: string | null;
+  allocations: BucketAllocation[];
 }

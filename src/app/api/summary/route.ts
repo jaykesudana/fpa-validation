@@ -7,9 +7,12 @@ import { db } from '@/lib/db';
 import { resolveFiscalYear } from '@/lib/fiscal-year';
 import { loadDepartmentsForCalc } from '@/lib/vcp/load-department';
 
-// Display order per 01-DOMAIN-AND-ROLES.md §5. "Other" is a real seeded
-// summary_group value (not computed here) — see 04-DATA-MODEL.sql.
-const GROUP_ORDER = ['RDI', 'Sales', 'Marketing', 'Customer Success', 'CTO', 'IT', 'Finance', 'HR', 'Legal', 'Executive Leadership', 'Other'];
+// Display order per 01-DOMAIN-AND-ROLES.md §5, extended per a follow-up
+// request: Events was originally grouped under "Other" (departments not
+// named in the spec's Summary group list) but is now split out as its own
+// group — see migrations/0003. "Other" remains a real seeded summary_group
+// value for anything else uncategorized.
+const GROUP_ORDER = ['RDI', 'Events', 'Sales', 'Marketing', 'Customer Success', 'CTO', 'IT', 'Finance', 'HR', 'Legal', 'Executive Leadership', 'Other'];
 
 function slug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
