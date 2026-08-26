@@ -8,6 +8,7 @@ import { GateChip } from '@/components/ui/GateChip';
 import { api } from '@/lib/api-client';
 import type { GateState } from '@/lib/calc/vcp';
 import { fmtCents } from '@/lib/calc/format';
+import { useSession } from '@/lib/session-context';
 
 interface VcpDeptRow {
   deptId: string;
@@ -28,6 +29,8 @@ interface VcpDeptResponse {
 const L1_ORDER = ['COGS', 'S&M', 'R&D', 'G&A'];
 
 export default function VcpOverviewPage() {
+  const { me } = useSession();
+  const isAdmin = me?.user.role === 'admin';
   const [data, setData] = useState<VcpDeptResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -55,6 +58,13 @@ export default function VcpOverviewPage() {
   return (
     <>
       <PageHeader eyebrow="Value Creation Plan" title="Savings by department" subtitle={data ? data.fiscalYear : undefined} />
+      {isAdmin && (
+        <div className="row" style={{ marginBottom: 16 }}>
+          <Link href="/vcp/line-items" className="idc-btn idc-btn--ghost">
+            Line items (all departments)
+          </Link>
+        </div>
+      )}
       {loading && <div className="empty-state">Loading…</div>}
       {!loading && (!data || data.departments.length === 0) && <div className="empty-state">No departments in scope yet.</div>}
       {!loading &&

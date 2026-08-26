@@ -1,5 +1,7 @@
 'use client';
 
+import { History } from 'lucide-react';
+import Link from 'next/link';
 import { DevSignIn } from './DevSignIn';
 import { NotificationBell } from './NotificationBell';
 
@@ -13,6 +15,9 @@ export function TopBar({ eyebrow, title, subtitle }: { eyebrow: string; title: s
       </div>
       <div className="top-bar__right">
         <DevSignIn />
+        <Link href="/audit" className="bell-btn" aria-label="Audit log" title="Audit log">
+          <History size={18} strokeWidth={1.75} />
+        </Link>
         <NotificationBell />
       </div>
     </div>
