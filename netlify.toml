@@ -1,0 +1,16 @@
+# Next.js 14 deploys zero-config on Netlify via the OpenNext adapter — no
+# @netlify/plugin-nextjs entry needed (that's the legacy approach). Don't pin
+# an adapter version here; Netlify auto-updates it on each build.
+# See: https://docs.netlify.com/frameworks/next-js/overview/
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[context.deploy-preview.environment]
+  ALLOW_DEV_AUTH = "false"
+  NOTIFY_EMAIL_ENABLED = "false"
+
+[context.branch-deploy.environment]
+  ALLOW_DEV_AUTH = "false"
+  NOTIFY_EMAIL_ENABLED = "false"
