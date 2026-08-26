@@ -26,6 +26,13 @@ export function deriveRegion(country: string): Region {
   return COUNTRY_REGION[country] ?? 'AMAS';
 }
 
+// 07-UI-SPEC.md §5 "Request detail" — the three-step progress tracker.
+export const STEPS = [
+  { key: 'submitted', label: 'Submitted' },
+  { key: 'screened', label: 'FP&A screen' },
+  { key: 'decided', label: 'CFO + ELT decision' },
+] as const;
+
 export const INV_TYPES = ['Headcount', 'Vendor', 'Capex', 'Program'] as const;
 export type InvType = (typeof INV_TYPES)[number];
 export const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'] as const;

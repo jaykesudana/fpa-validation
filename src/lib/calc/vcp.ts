@@ -273,6 +273,18 @@ export function initDeptCategoryBreakdown(d: Department, initiativeId: string): 
   return Array.from(sums.values()).sort((a, b) => (a.group === b.group ? order(a.category) - order(b.category) : a.group === 'run' ? -1 : 1));
 }
 
+// 01-DOMAIN-AND-ROLES.md §3 "VCP notification events".
+export const EVENT_META = {
+  assign: { label: 'Access granted', clr: '#166BF4' },
+  target: { label: 'Target set', clr: '#1D1D7F' },
+  baseline: { label: 'Baseline uploaded', clr: '#B0560F' },
+  approve: { label: 'Baseline approved', clr: '#628B48' },
+  reject: { label: 'Baseline rejected', clr: '#B3001B' },
+  validation: { label: 'Validation uploaded', clr: '#166BF4' },
+  vapprove: { label: 'Validation approved', clr: '#628B48' },
+  vreject: { label: 'Validation rejected', clr: '#B3001B' },
+} as const;
+
 export interface InitiativeDeptRow {
   initiativeId: string;
   targetCents: number;
