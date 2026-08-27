@@ -3,6 +3,8 @@ import { db } from '@/lib/db';
 import { toErrorResponse } from '@/lib/auth/http';
 import { requireScope } from '@/lib/auth/scope';
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 interface UserRow {
   id: string;
   email: string;
@@ -70,6 +72,9 @@ export async function POST(req: Request) {
     const role = body?.role;
     if (!email || !name || (role !== 'admin' && role !== 'fbp')) {
       return NextResponse.json({ error: 'email, name, and a role of admin or fbp are required' }, { status: 400 });
+    }
+    if (!EMAIL_RE.test(email)) {
+      return NextResponse.json({ error: 'email must be a valid address (e.g. name@idc.com) — check the email and name fields aren\'t swapped.' }, { status: 400 });
     }
 
     const sql = db();

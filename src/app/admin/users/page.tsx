@@ -180,6 +180,20 @@ export default function AdminUsersPage() {
     }
   }
 
+  async function deleteUser(userId: string, userName: string) {
+    if (!window.confirm(`Delete ${userName}? This can't be undone. If they have any activity history (uploads, requests, audit entries), this will fail — deactivate them instead.`)) {
+      return;
+    }
+    try {
+      await api.delete(`/api/admin/users/${userId}`);
+      showToast('User deleted.', 'success');
+      load();
+      refreshRoster();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not delete the user.', 'error');
+    }
+  }
+
   async function saveProfile(userId: string) {
     if (!profileName.trim() || !profileEmail.trim()) {
       showToast('Name and email cannot be blank.', 'error');
@@ -340,6 +354,9 @@ export default function AdminUsersPage() {
                       )}
                       <button type="button" className="idc-btn idc-btn--ghost" onClick={() => toggleActive(u.id, !u.active)}>
                         {u.active ? 'Deactivate' : 'Reactivate'}
+                      </button>
+                      <button type="button" className="idc-btn idc-btn--ghost" onClick={() => deleteUser(u.id, u.name)}>
+                        Delete
                       </button>
                     </div>
                   </td>
