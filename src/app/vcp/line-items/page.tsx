@@ -1,6 +1,7 @@
 'use client';
 
-import { Download, Filter } from 'lucide-react';
+import { ArrowLeft, Download, Filter } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
@@ -12,7 +13,6 @@ import { useSession } from '@/lib/session-context';
 interface LineItem {
   departmentId: string;
   departmentName: string;
-  departmentSummaryGroup: string;
   source: 'baseline' | 'validation';
   version: string;
   versionState: string;
@@ -42,9 +42,18 @@ interface LineItemsResponse {
   lineItems: LineItem[];
 }
 
-// Same display order used by the Summary tower (src/app/api/summary/route.ts)
-// so "Group" reads consistently across the app.
-const GROUP_ORDER = ['RDI', 'Events', 'Sales', 'Marketing', 'Customer Success', 'CTO', 'IT', 'Finance', 'HR', 'Legal', 'Executive Leadership', 'Other'];
+// dd-mm-yyyy, no time — uses UTC components so date-only columns (target
+// date, validated date) don't shift a day depending on the viewer's
+// timezone offset from a stored midnight-UTC value.
+function formatDate(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const yyyy = d.getUTCFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
 
 interface Column {
   key: string;
@@ -54,10 +63,39 @@ interface Column {
   exportValue?: (r: LineItem) => string | number;
 }
 
-const COLUMNS: Column[] = [
-  { key: 'group', label: 'Group', get: (r) => r.departmentSummaryGroup },
+// Baseline (Gate 2) and Validation (Gate 3) rows have genuinely different
+// shapes — validation adds status/validated-amount/validated-date/status
+// update on top of what a baseline row has — so each source gets its own
+// column set rather than one table with columns that are blank half the time.
+const BASELINE_COLUMNS: Column[] = [
   { key: 'department', label: 'Department', get: (r) => r.departmentName },
-  { key: 'source', label: 'Source', get: (r) => (r.source === 'baseline' ? 'Baseline (Gate 2)' : 'Validation (Gate 3)') },
+  { key: 'initiative', label: 'Initiative', get: (r) => r.initiativeName },
+  { key: 'deptNo', label: 'Dept #', get: (r) => r.deptNo },
+  { key: 'name', label: 'Line item', get: (r) => r.name },
+  { key: 'category', label: 'Category', get: (r) => r.category },
+  { key: 'eeId', label: 'EE ID', get: (r) => r.eeId },
+  { key: 'country', label: 'Country', get: (r) => r.country },
+  { key: 'frequency', label: 'Frequency', get: (r) => r.frequency },
+  { key: 'targetDate', label: 'Target date', get: (r) => formatDate(r.targetDate) },
+  {
+    key: 'identified',
+    label: 'Identified',
+    get: (r) => fmtCents(r.identifiedCents),
+    sortValue: (r) => r.identifiedCents,
+    exportValue: (r) => r.identifiedCents / 100,
+  },
+  { key: 'notes', label: 'Notes', get: (r) => r.notes },
+  { key: 'uploadedBy', label: 'Uploaded by', get: (r) => r.uploadedByName },
+  {
+    key: 'uploadedAt',
+    label: 'Last uploaded',
+    get: (r) => formatDate(r.uploadedAt),
+    sortValue: (r) => new Date(r.uploadedAt).getTime(),
+  },
+];
+
+const VALIDATION_COLUMNS: Column[] = [
+  { key: 'department', label: 'Department', get: (r) => r.departmentName },
   { key: 'version', label: 'Version', get: (r) => r.version },
   { key: 'initiative', label: 'Initiative', get: (r) => r.initiativeName },
   { key: 'deptNo', label: 'Dept #', get: (r) => r.deptNo },
@@ -66,7 +104,7 @@ const COLUMNS: Column[] = [
   { key: 'eeId', label: 'EE ID', get: (r) => r.eeId },
   { key: 'country', label: 'Country', get: (r) => r.country },
   { key: 'frequency', label: 'Frequency', get: (r) => r.frequency },
-  { key: 'targetDate', label: 'Target date', get: (r) => r.targetDate },
+  { key: 'targetDate', label: 'Target date', get: (r) => formatDate(r.targetDate) },
   {
     key: 'identified',
     label: 'Identified',
@@ -75,12 +113,21 @@ const COLUMNS: Column[] = [
     exportValue: (r) => r.identifiedCents / 100,
   },
   { key: 'status', label: 'Status', get: (r) => r.status ?? '—' },
-  { key: 'notes', label: 'Notes', get: (r) => r.statusUpdate || r.notes },
+  {
+    key: 'validated',
+    label: 'Validated',
+    get: (r) => (r.validatedCents == null ? '' : fmtCents(r.validatedCents)),
+    sortValue: (r) => r.validatedCents ?? 0,
+    exportValue: (r) => (r.validatedCents == null ? '' : r.validatedCents / 100),
+  },
+  { key: 'validatedDate', label: 'Validated date', get: (r) => formatDate(r.validatedDate) },
+  { key: 'statusUpdate', label: 'Status update', get: (r) => r.statusUpdate ?? '' },
+  { key: 'notes', label: 'Notes', get: (r) => r.notes },
   { key: 'uploadedBy', label: 'Uploaded by', get: (r) => r.uploadedByName },
   {
     key: 'uploadedAt',
     label: 'Last uploaded',
-    get: (r) => new Date(r.uploadedAt).toLocaleString(),
+    get: (r) => formatDate(r.uploadedAt),
     sortValue: (r) => new Date(r.uploadedAt).getTime(),
   },
 ];
@@ -224,7 +271,7 @@ export default function LineItemsPage() {
   const [data, setData] = useState<LineItemsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [viewMode, setViewMode] = useState<'flat' | 'grouped'>('flat');
+  const [sourceTab, setSourceTab] = useState<'baseline' | 'validation'>('baseline');
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
   const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>({});
 
@@ -239,7 +286,8 @@ export default function LineItemsPage() {
       .finally(() => setLoading(false));
   }, [isAdmin]);
 
-  const rows = data?.lineItems ?? [];
+  const COLUMNS = sourceTab === 'baseline' ? BASELINE_COLUMNS : VALIDATION_COLUMNS;
+  const rows = useMemo(() => (data?.lineItems ?? []).filter((r) => r.source === sourceTab), [data, sourceTab]);
 
   const valuesByColumn = useMemo(() => {
     const out: Record<string, string[]> = {};
@@ -247,7 +295,7 @@ export default function LineItemsPage() {
       out[col.key] = Array.from(new Set(rows.map((r) => col.get(r)))).sort((a, b) => a.localeCompare(b));
     }
     return out;
-  }, [rows]);
+  }, [rows, COLUMNS]);
 
   const filteredRows = useMemo(() => {
     return rows.filter((r) =>
@@ -256,7 +304,7 @@ export default function LineItemsPage() {
         return !filter || filter.has(col.get(r));
       }),
     );
-  }, [rows, columnFilters]);
+  }, [rows, columnFilters, COLUMNS]);
 
   const sortedRows = useMemo(() => {
     if (!sort) return filteredRows;
@@ -266,22 +314,7 @@ export default function LineItemsPage() {
     withVal.sort((a, b) => (typeof a.v === 'number' && typeof b.v === 'number' ? a.v - b.v : String(a.v).localeCompare(String(b.v))));
     const ordered = withVal.map((x) => x.r);
     return sort.dir === 'desc' ? ordered.reverse() : ordered;
-  }, [filteredRows, sort]);
-
-  const groupedSections = useMemo(() => {
-    const byGroup = new Map<string, LineItem[]>();
-    for (const r of sortedRows) {
-      const g = r.departmentSummaryGroup || 'Other';
-      const list = byGroup.get(g);
-      if (list) list.push(r);
-      else byGroup.set(g, [r]);
-    }
-    const present = Array.from(byGroup.keys());
-    const order = [...GROUP_ORDER.filter((g) => present.includes(g)), ...present.filter((g) => !GROUP_ORDER.includes(g))];
-    return order.map((g) => ({ group: g, rows: byGroup.get(g) ?? [] }));
-  }, [sortedRows]);
-
-  const displayRows = viewMode === 'grouped' ? groupedSections.flatMap((s) => s.rows) : sortedRows;
+  }, [filteredRows, sort, COLUMNS]);
 
   function handleSort(key: string) {
     setSort((prev) => {
@@ -302,11 +335,12 @@ export default function LineItemsPage() {
 
   function handleExport() {
     const header = COLUMNS.map((c) => c.label);
-    const body = displayRows.map((r) => COLUMNS.map((c) => (c.exportValue ? c.exportValue(r) : c.get(r))));
+    const body = sortedRows.map((r) => COLUMNS.map((c) => (c.exportValue ? c.exportValue(r) : c.get(r))));
     const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Line items');
-    XLSX.writeFile(wb, `vcp-line-items-${data?.fiscalYear ?? 'export'}.xlsx`);
+    const sheetLabel = sourceTab === 'baseline' ? 'baseline' : 'validation';
+    XLSX.writeFile(wb, `vcp-line-items-${sheetLabel}-${data?.fiscalYear ?? 'export'}.xlsx`);
   }
 
   if (!isAdmin) {
@@ -335,15 +369,35 @@ export default function LineItemsPage() {
       <PageHeader eyebrow="Value Creation Plan" title="Line items — all departments" subtitle={data ? data.fiscalYear : undefined} />
 
       <div className="row--between" style={{ marginBottom: 16 }}>
-        <div className="pill-tabs" style={{ margin: 0 }}>
-          <button type="button" className={viewMode === 'flat' ? 'pill-tab is-active' : 'pill-tab'} onClick={() => setViewMode('flat')}>
-            Flat list
-          </button>
-          <button type="button" className={viewMode === 'grouped' ? 'pill-tab is-active' : 'pill-tab'} onClick={() => setViewMode('grouped')}>
-            By group
-          </button>
+        <div className="row" style={{ gap: 12 }}>
+          <Link href="/vcp" className="idc-btn idc-btn--ghost">
+            <ArrowLeft size={14} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />
+            Back
+          </Link>
+          <div className="pill-tabs" style={{ margin: 0 }}>
+            <button
+              type="button"
+              className={sourceTab === 'baseline' ? 'pill-tab is-active' : 'pill-tab'}
+              onClick={() => {
+                setSourceTab('baseline');
+                setSort(null);
+              }}
+            >
+              Baseline (Gate 2)
+            </button>
+            <button
+              type="button"
+              className={sourceTab === 'validation' ? 'pill-tab is-active' : 'pill-tab'}
+              onClick={() => {
+                setSourceTab('validation');
+                setSort(null);
+              }}
+            >
+              Validation (Gate 3)
+            </button>
+          </div>
         </div>
-        <button type="button" className="idc-btn idc-btn--primary" onClick={handleExport} disabled={displayRows.length === 0}>
+        <button type="button" className="idc-btn idc-btn--primary" onClick={handleExport} disabled={sortedRows.length === 0}>
           <Download size={14} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />
           Export
         </button>
@@ -351,9 +405,9 @@ export default function LineItemsPage() {
 
       {loading && <div className="empty-state">Loading…</div>}
       {!loading && error && <div className="empty-state">Could not load line items.</div>}
-      {!loading && !error && displayRows.length === 0 && <div className="empty-state">No line items match these filters.</div>}
+      {!loading && !error && sortedRows.length === 0 && <div className="empty-state">No line items match these filters.</div>}
 
-      {!loading && !error && displayRows.length > 0 && viewMode === 'flat' && (
+      {!loading && !error && sortedRows.length > 0 && (
         <div className="panel" style={{ overflowX: 'auto' }}>
           <table className="idc-table idc-table--dense idc-table--zebra">
             <thead>
@@ -375,36 +429,6 @@ export default function LineItemsPage() {
           </table>
         </div>
       )}
-
-      {!loading &&
-        !error &&
-        displayRows.length > 0 &&
-        viewMode === 'grouped' &&
-        groupedSections
-          .filter((s) => s.rows.length > 0)
-          .map((section) => (
-            <div className="panel" key={section.group} style={{ overflowX: 'auto' }}>
-              <p className="panel__title">{section.group}</p>
-              <table className="idc-table idc-table--dense idc-table--zebra">
-                <thead>
-                  <tr>
-                    {COLUMNS.map((col) => (
-                      <ColumnHeader
-                        key={col.key}
-                        col={col}
-                        values={valuesByColumn[col.key] ?? []}
-                        selected={columnFilters[col.key] ?? null}
-                        onFilterChange={(next) => handleFilterChange(col.key, next)}
-                        sortDir={sort?.key === col.key ? sort.dir : null}
-                        onSort={() => handleSort(col.key)}
-                      />
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>{section.rows.map(renderRow)}</tbody>
-              </table>
-            </div>
-          ))}
     </>
   );
 }

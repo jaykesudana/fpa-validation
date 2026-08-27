@@ -8,7 +8,6 @@ import { resolveFiscalYear } from '@/lib/fiscal-year';
 interface DeptRow {
   id: string;
   name: string;
-  summary_group: string;
 }
 interface UploadRow {
   id: string;
@@ -67,7 +66,7 @@ export async function GET(req: Request) {
     const sql = db();
 
     const [depts, uploads, validationMeta] = await Promise.all([
-      sql`select id, name, summary_group from departments where active = true order by sort_order` as unknown as Promise<DeptRow[]>,
+      sql`select id, name from departments where active = true order by sort_order` as unknown as Promise<DeptRow[]>,
       sql`
         select id, department_id, file_name, state, uploaded_by_name, uploaded_at
         from vcp_uploads
@@ -123,7 +122,6 @@ export async function GET(req: Request) {
         .map((r) => ({
           departmentId: deptId,
           departmentName: dept?.name ?? deptId,
-          departmentSummaryGroup: dept?.summary_group ?? 'Other',
           source: 'validation' as const,
           version: `v${v.version}`,
           versionState: v.state,
@@ -156,7 +154,6 @@ export async function GET(req: Request) {
         .map((r) => ({
           departmentId: d.id,
           departmentName: d.name,
-          departmentSummaryGroup: d.summary_group,
           source: 'baseline' as const,
           version: 'Baseline',
           versionState: upload.state,
