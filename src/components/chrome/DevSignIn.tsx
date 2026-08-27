@@ -32,7 +32,17 @@ export function DevSignIn() {
 
   useEffect(() => {
     loadRoster();
-    return onRosterChanged(loadRoster);
+    const unsubscribe = onRosterChanged(loadRoster);
+    // Belt-and-suspenders beyond the roster-changed event: a native <select>
+    // reads its <option> list synchronously the instant it's opened, so an
+    // async refetch kicked off on focus/mousedown can lose that race. A
+    // short poll guarantees this goes stale for at most a few seconds no
+    // matter what — cheap for a tiny roster endpoint on an internal tool.
+    const interval = setInterval(loadRoster, 5000);
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
   }, [loadRoster]);
 
   async function signInAs(email: string) {
