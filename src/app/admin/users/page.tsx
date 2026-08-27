@@ -112,6 +112,9 @@ export default function AdminUsersPage() {
   const [newRole, setNewRole] = useState<'admin' | 'fbp'>('fbp');
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<{ userId: string; userName: string; tower: 'vcp' | 'inv' } | null>(null);
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
+  const [profileName, setProfileName] = useState('');
+  const [profileEmail, setProfileEmail] = useState('');
 
   function load() {
     setLoading(true);
@@ -169,6 +172,23 @@ export default function AdminUsersPage() {
     try {
       await api.put(`/api/admin/users/${userId}`, { active });
       showToast(active ? 'User reactivated.' : 'User deactivated.', 'success');
+      load();
+      refreshRoster();
+      emitRosterChanged();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not update the user.', 'error');
+    }
+  }
+
+  async function saveProfile(userId: string) {
+    if (!profileName.trim() || !profileEmail.trim()) {
+      showToast('Name and email cannot be blank.', 'error');
+      return;
+    }
+    try {
+      await api.put(`/api/admin/users/${userId}`, { name: profileName.trim(), email: profileEmail.trim() });
+      showToast('User updated.', 'success');
+      setEditingProfileId(null);
       load();
       refreshRoster();
       emitRosterChanged();
@@ -237,8 +257,20 @@ export default function AdminUsersPage() {
             <tbody>
               {users.map((u) => (
                 <tr key={u.id}>
-                  <td>{u.name}</td>
-                  <td className="muted">{u.email}</td>
+                  <td>
+                    {editingProfileId === u.id ? (
+                      <input type="text" value={profileName} onChange={(e) => setProfileName(e.target.value)} style={{ width: 160 }} />
+                    ) : (
+                      u.name
+                    )}
+                  </td>
+                  <td className="muted">
+                    {editingProfileId === u.id ? (
+                      <input type="email" value={profileEmail} onChange={(e) => setProfileEmail(e.target.value)} style={{ width: 200 }} />
+                    ) : (
+                      u.email
+                    )}
+                  </td>
                   <td>
                     <select value={u.role} onChange={(e) => changeRole(u.id, e.target.value as 'admin' | 'fbp')}>
                       <option value="fbp">Business partner</option>
@@ -266,6 +298,28 @@ export default function AdminUsersPage() {
                   </td>
                   <td>
                     <div className="row">
+                      {editingProfileId === u.id ? (
+                        <>
+                          <button type="button" className="idc-btn idc-btn--primary" onClick={() => saveProfile(u.id)}>
+                            Save
+                          </button>
+                          <button type="button" className="idc-btn idc-btn--ghost" onClick={() => setEditingProfileId(null)}>
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="idc-btn idc-btn--ghost"
+                          onClick={() => {
+                            setEditingProfileId(u.id);
+                            setProfileName(u.name);
+                            setProfileEmail(u.email);
+                          }}
+                        >
+                          Edit
+                        </button>
+                      )}
                       {u.role !== 'admin' && (
                         <>
                           <button
