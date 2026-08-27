@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/chrome/PageHeader';
 import { api } from '@/lib/api-client';
+import { emitRosterChanged } from '@/lib/roster-events';
 import { useSession } from '@/lib/session-context';
 import { useToast } from '@/lib/toast-context';
 
@@ -142,6 +143,7 @@ export default function AdminUsersPage() {
       setNewName('');
       setNewRole('fbp');
       load();
+      emitRosterChanged();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not add the user.', 'error');
     } finally {
@@ -154,6 +156,7 @@ export default function AdminUsersPage() {
       await api.put(`/api/admin/users/${userId}`, { role });
       showToast('Role updated.', 'success');
       load();
+      emitRosterChanged();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not update the role.', 'error');
     }
@@ -164,6 +167,7 @@ export default function AdminUsersPage() {
       await api.put(`/api/admin/users/${userId}`, { active });
       showToast(active ? 'User reactivated.' : 'User deactivated.', 'success');
       load();
+      emitRosterChanged();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not update the user.', 'error');
     }
@@ -176,6 +180,7 @@ export default function AdminUsersPage() {
       showToast('Access updated.', 'success');
       setEditing(null);
       load();
+      emitRosterChanged();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not update access.', 'error');
     }

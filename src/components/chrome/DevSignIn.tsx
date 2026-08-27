@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api-client';
+import { onRosterChanged } from '@/lib/roster-events';
 import { useSession } from '@/lib/session-context';
 import { useToast } from '@/lib/toast-context';
 
@@ -23,10 +24,14 @@ export function DevSignIn() {
   const [roster, setRoster] = useState<RosterUser[] | null>(null);
 
   useEffect(() => {
-    api
-      .get<{ users: RosterUser[] }>('/api/dev/users')
-      .then((r) => setRoster(r.users))
-      .catch(() => setRoster([]));
+    function loadRoster() {
+      api
+        .get<{ users: RosterUser[] }>('/api/dev/users')
+        .then((r) => setRoster(r.users))
+        .catch(() => setRoster([]));
+    }
+    loadRoster();
+    return onRosterChanged(loadRoster);
   }, []);
 
   async function signInAs(email: string) {
