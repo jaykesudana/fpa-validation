@@ -1,49 +1,22 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api-client';
-import { onRosterChanged } from '@/lib/roster-events';
+import { useRoster } from '@/lib/roster-context';
 import { useSession } from '@/lib/session-context';
 import { useToast } from '@/lib/toast-context';
 
-interface RosterUser {
-  email: string;
-  name: string;
-  role: 'admin' | 'fbp';
-}
-
 /**
  * Temporary stand-in for real SSO — see src/lib/auth/session.ts. Renders
- * nothing if ALLOW_DEV_AUTH is off (GET /api/dev/users 404s, so the roster
- * fetch below fails and this returns null) — same disappearing behaviour
- * the prototype's role switcher was supposed to have in production.
+ * nothing if ALLOW_DEV_AUTH is off (GET /api/dev/users 404s via RosterProvider,
+ * so `roster` stays empty) — same disappearing behaviour the prototype's role
+ * switcher was supposed to have in production. Reads `roster` from the same
+ * shared context the User Access page writes to — see roster-context.tsx —
+ * so there's no separate fetch of its own to go stale.
  */
 export function DevSignIn() {
   const { me, signedIn, refresh } = useSession();
+  const { roster } = useRoster();
   const { showToast } = useToast();
-  const [roster, setRoster] = useState<RosterUser[] | null>(null);
-
-  const loadRoster = useCallback(() => {
-    api
-      .get<{ users: RosterUser[] }>('/api/dev/users')
-      .then((r) => setRoster(r.users))
-      .catch(() => setRoster([]));
-  }, []);
-
-  useEffect(() => {
-    loadRoster();
-    const unsubscribe = onRosterChanged(loadRoster);
-    // Belt-and-suspenders beyond the roster-changed event: a native <select>
-    // reads its <option> list synchronously the instant it's opened, so an
-    // async refetch kicked off on focus/mousedown can lose that race. A
-    // short poll guarantees this goes stale for at most a few seconds no
-    // matter what — cheap for a tiny roster endpoint on an internal tool.
-    const interval = setInterval(loadRoster, 5000);
-    return () => {
-      unsubscribe();
-      clearInterval(interval);
-    };
-  }, [loadRoster]);
 
   async function signInAs(email: string) {
     if (!email) return;
@@ -64,17 +37,12 @@ export function DevSignIn() {
     }
   }
 
-  if (roster === null || roster.length === 0) return null;
+  if (roster.length === 0) return null;
 
   return (
     <div className="dev-sign-in">
       <span className="dev-sign-in__label">Dev sign-in</span>
-      <select
-        value={signedIn ? me?.user.email ?? '' : ''}
-        onChange={(e) => signInAs(e.target.value)}
-        onMouseDown={loadRoster}
-        onFocus={loadRoster}
-      >
+      <select value={signedIn ? me?.user.email ?? '' : ''} onChange={(e) => signInAs(e.target.value)}>
         <option value="" disabled>
           {signedIn ? me?.displayName : 'Choose a user…'}
         </option>
