@@ -1,5 +1,7 @@
 'use client';
 
+import { ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { PageHeader } from '@/components/chrome/PageHeader';
 import { CoverageChip } from '@/components/ui/CoverageChip';
@@ -48,6 +50,13 @@ export default function VcpDepartmentDetailPage({ params }: { params: { deptId: 
   return (
     <>
       <PageHeader eyebrow="Value Creation Plan" title={detail ? detail.name : 'Department'} subtitle={me?.fiscalYear?.label} />
+
+      <div className="row" style={{ marginBottom: 16 }}>
+        <Link href="/vcp" className="idc-btn idc-btn--ghost">
+          <ArrowLeft size={14} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />
+          Back
+        </Link>
+      </div>
 
       {loading && <div className="empty-state">Loading…</div>}
       {!loading && error && <div className="empty-state">{error}</div>}

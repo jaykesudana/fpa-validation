@@ -1,5 +1,7 @@
 'use client';
 
+import { ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { PageHeader } from '@/components/chrome/PageHeader';
 import { AuditTrail } from '@/components/ui/AuditTrail';
@@ -12,6 +14,17 @@ import { useToast } from '@/lib/toast-context';
 import type { InvRequestDetail } from '@/lib/types/investments';
 
 const PRE_DECISION = ['draft', 'submitted', 'screened', 'returned'];
+
+function BackToInvestments() {
+  return (
+    <div className="row" style={{ marginBottom: 16 }}>
+      <Link href="/investments" className="idc-btn idc-btn--ghost">
+        <ArrowLeft size={14} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />
+        Back
+      </Link>
+    </div>
+  );
+}
 
 function formatBytes(bytes: number | null): string {
   if (bytes == null) return '';
@@ -62,6 +75,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
     return (
       <>
         <PageHeader eyebrow="Investment Requests" title="Request" />
+        <BackToInvestments />
         <div className="empty-state">Loading…</div>
       </>
     );
@@ -70,6 +84,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
     return (
       <>
         <PageHeader eyebrow="Investment Requests" title="Request" />
+        <BackToInvestments />
         <div className="empty-state">Could not load this request.</div>
       </>
     );
@@ -81,6 +96,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
   return (
     <>
       <PageHeader eyebrow="Investment Requests" title={`${detail.ref} · ${detail.title || 'Untitled'}`} />
+      <BackToInvestments />
 
       <div className="panel">
         <div className="row--between">

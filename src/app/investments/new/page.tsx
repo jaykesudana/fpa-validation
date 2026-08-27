@@ -1,5 +1,7 @@
 'use client';
 
+import { ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { PageHeader } from '@/components/chrome/PageHeader';
@@ -109,6 +111,12 @@ export default function NewRequestPage() {
   return (
     <>
       <PageHeader eyebrow="Investment Requests" title="New request" />
+      <div className="row" style={{ marginBottom: 16 }}>
+        <Link href="/investments" className="idc-btn idc-btn--ghost">
+          <ArrowLeft size={14} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />
+          Back
+        </Link>
+      </div>
       <div className="panel">
         <div className="stack">
           <div className="idc-field">

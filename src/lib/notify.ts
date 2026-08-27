@@ -86,6 +86,22 @@ export async function notifyAllPartners(input: NotifyAllPartnersInput): Promise<
   await fanOut(input.tower, input.event, input.subject, input.body, input.linkKind, input.linkRef, recipients);
 }
 
+export interface NotifyUserInput {
+  tower: Tower;
+  event: string;
+  userId: string;
+  subject: string;
+  body: string;
+  linkKind?: string;
+  linkRef?: string;
+}
+
+/** Direct-to-one-person notification — access grants belong to a specific
+ * user, not a department's whole grantee list, so notifyDept doesn't fit. */
+export async function notifyUser(input: NotifyUserInput): Promise<void> {
+  await fanOut(input.tower, input.event, input.subject, input.body, input.linkKind, input.linkRef, [{ recipientId: input.userId, isCc: false }]);
+}
+
 export interface NotifyAdminsInput {
   tower: Tower;
   event: string;
