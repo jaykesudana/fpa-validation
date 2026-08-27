@@ -1,11 +1,14 @@
 'use client';
 
+import { Presentation } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/chrome/PageHeader';
 import { CoverageChip } from '@/components/ui/CoverageChip';
 import { api } from '@/lib/api-client';
 import { coverage } from '@/lib/calc/vcp';
 import { fmtCents } from '@/lib/calc/format';
+import { exportPresentationDeck } from '@/lib/export/presentation';
+import { useToast } from '@/lib/toast-context';
 
 interface SummaryDeptRow {
   dept: string;
@@ -63,11 +66,13 @@ interface BucketResponse {
 }
 
 export default function SummaryPage() {
+  const { showToast } = useToast();
   const [data, setData] = useState<SummaryResponse | null>(null);
   const [bucket, setBucket] = useState<BucketResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeGroup, setActiveGroup] = useState('all');
   const [lens, setLens] = useState<'dept' | 'initiative'>('dept');
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -104,6 +109,29 @@ export default function SummaryPage() {
     return activeGroup === 'all' ? data.groups : data.groups.filter((g) => g.key === activeGroup);
   }, [data, activeGroup]);
 
+  async function handleExportDeck() {
+    if (!data) return;
+    setExporting(true);
+    try {
+      // Always the full "all groups" breadth, regardless of the tab
+      // currently selected on-screen — a presentation deck is meant to be
+      // the complete picture, not whatever narrow filter someone's looking
+      // at when they click Export. Otherwise scoped exactly like the page
+      // itself: only what this viewer's own department grants show them.
+      await exportPresentationDeck({
+        fiscalYearLabel: data.fiscalYear,
+        groups: data.groups,
+        vcpInitiatives: data.initiatives.vcp,
+        invInitiatives: data.initiatives.inv,
+        bucket,
+      });
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not build the presentation.', 'error');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -111,6 +139,15 @@ export default function SummaryPage() {
         title="Portfolio summary"
         subtitle={data ? `${data.fiscalYear} — combined view of savings and investment` : undefined}
       />
+
+      {!loading && data && (
+        <div className="row" style={{ marginBottom: 16, justifyContent: 'flex-end' }}>
+          <button type="button" className="idc-btn idc-btn--primary" disabled={exporting} onClick={handleExportDeck}>
+            <Presentation size={14} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />
+            {exporting ? 'Building…' : 'Export presentation'}
+          </button>
+        </div>
+      )}
 
       {loading && <div className="empty-state">Loading…</div>}
 
