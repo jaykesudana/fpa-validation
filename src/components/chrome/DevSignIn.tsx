@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api-client';
 import { onRosterChanged } from '@/lib/roster-events';
 import { useSession } from '@/lib/session-context';
@@ -23,16 +23,17 @@ export function DevSignIn() {
   const { showToast } = useToast();
   const [roster, setRoster] = useState<RosterUser[] | null>(null);
 
+  const loadRoster = useCallback(() => {
+    api
+      .get<{ users: RosterUser[] }>('/api/dev/users')
+      .then((r) => setRoster(r.users))
+      .catch(() => setRoster([]));
+  }, []);
+
   useEffect(() => {
-    function loadRoster() {
-      api
-        .get<{ users: RosterUser[] }>('/api/dev/users')
-        .then((r) => setRoster(r.users))
-        .catch(() => setRoster([]));
-    }
     loadRoster();
     return onRosterChanged(loadRoster);
-  }, []);
+  }, [loadRoster]);
 
   async function signInAs(email: string) {
     if (!email) return;
@@ -58,7 +59,12 @@ export function DevSignIn() {
   return (
     <div className="dev-sign-in">
       <span className="dev-sign-in__label">Dev sign-in</span>
-      <select value={signedIn ? me?.user.email ?? '' : ''} onChange={(e) => signInAs(e.target.value)}>
+      <select
+        value={signedIn ? me?.user.email ?? '' : ''}
+        onChange={(e) => signInAs(e.target.value)}
+        onMouseDown={loadRoster}
+        onFocus={loadRoster}
+      >
         <option value="" disabled>
           {signedIn ? me?.displayName : 'Choose a user…'}
         </option>

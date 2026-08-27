@@ -15,5 +15,7 @@ export async function GET() {
   }
   const sql = db();
   const users = await sql`select email, name, role from users where active = true order by name`;
-  return NextResponse.json({ users });
+  // Belt-and-suspenders alongside `dynamic = 'force-dynamic'` — explicitly
+  // tell any CDN/edge cache in front of the function not to store this.
+  return NextResponse.json({ users }, { headers: { 'Cache-Control': 'no-store, must-revalidate' } });
 }
