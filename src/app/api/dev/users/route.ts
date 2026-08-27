@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { devAuthEnabled } from '@/lib/auth/session';
 
+// This handler takes no request param and reads no dynamic API (cookies(),
+// headers()), so Next.js's App Router would otherwise treat it as static
+// and cache the response — potentially baked in at build/deploy time and
+// never re-run. Force it dynamic so role/active changes show up live.
+export const dynamic = 'force-dynamic';
+
 /** Convenience roster listing for picking who to "sign in as" while there's no admin UI yet. */
 export async function GET() {
   if (!devAuthEnabled()) {
