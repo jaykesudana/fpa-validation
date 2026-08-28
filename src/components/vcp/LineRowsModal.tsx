@@ -78,6 +78,7 @@ export function LineRowsModal({
                       <th className="num">Validated</th>
                       <th>Validated date</th>
                       <th>Status update</th>
+                      <th>Origin</th>
                     </>
                   )}
                   <th>Notes</th>
@@ -105,6 +106,7 @@ export function LineRowsModal({
                           <td className="num">{fmtCents(vr.validatedCents)}</td>
                           <td>{formatDate(vr.validatedDate)}</td>
                           <td style={{ maxWidth: 200 }}>{vr.statusUpdate}</td>
+                          <td>{vr.lineOrigin === 'added' ? 'Added since baseline' : 'Baseline'}</td>
                         </>
                       )}
                       <td style={{ maxWidth: 200 }}>{r.notes}</td>

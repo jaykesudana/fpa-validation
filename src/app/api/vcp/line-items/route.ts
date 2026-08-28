@@ -4,6 +4,7 @@ import { toErrorResponse } from '@/lib/auth/http';
 import { requireScope } from '@/lib/auth/scope';
 import { decryptField } from '@/lib/crypto/field-crypto';
 import { resolveFiscalYear } from '@/lib/fiscal-year';
+import { lineKey, resolveLineOrigin } from '@/lib/vcp/line-origin';
 
 interface DeptRow {
   id: string;
@@ -48,30 +49,6 @@ interface RawValidationRow extends RawRow {
   validated_date: string | null;
   status_update: string | null;
   baseline_row_id: string | null;
-}
-
-// Migration 0004: validations uploaded from a workbook with the "Row ID (do
-// not edit)" column carry an EXACT baseline_row_id — a real FK to the
-// vcp_upload_rows this line was pre-filled from, validated at upload time.
-// That's authoritative whenever it's set; the heuristic below only covers
-// validations uploaded before that column existed (baseline_row_id is
-// null for every row on those) and genuinely hand-typed new rows.
-//
-// A "line" has no stable id across baseline → validation — vcp_validation_rows
-// only carries a validation_id and a row_no (a position, not an identity), so
-// there's no foreign key to match against directly. Priority: (1) EE ID —
-// the field that specifically identifies an individual employee, the most
-// reliable signal for "is this the same person" and the reason this was
-// re-checked: Dept # alone false-matched a new row against an existing
-// baseline row (almost certainly a reused/copied Dept #); (2) Dept #, for
-// non-headcount lines (vendor, etc.) that don't carry an EE ID; (3)
-// initiative + normalized name, for rows with neither filled in.
-function lineKey(initiativeId: string, eeId: string, deptNo: string | null, name: string): string {
-  const trimmedEeId = eeId.trim();
-  if (trimmedEeId && trimmedEeId !== '-') return `ee::${initiativeId}::${trimmedEeId}`;
-  const trimmedDeptNo = deptNo?.trim();
-  if (trimmedDeptNo) return `deptno::${initiativeId}::${trimmedDeptNo}`;
-  return `name::${initiativeId}::${name.trim().toLowerCase()}`;
 }
 
 // GET /api/vcp/line-items?fy=… — admin only. Not in 05-API.md; added per a
@@ -194,14 +171,7 @@ export async function GET(req: Request) {
             validatedCents: Number(r.validated_cents),
             validatedDate: r.validated_date ?? '',
             statusUpdate: r.status_update ?? '',
-            // Exact match (validated against the real baseline at upload
-            // time — see validations/route.ts) wins outright; only fall back
-            // to the heuristic when no Row ID was captured for this row.
-            lineOrigin: (r.baseline_row_id != null
-              ? 'baseline'
-              : baselineKeys.has(lineKey(r.initiative_id, eeId, r.dept_no, r.name))
-                ? 'baseline'
-                : 'added') as 'baseline' | 'added',
+            lineOrigin: resolveLineOrigin(r.baseline_row_id, r.initiative_id, eeId, r.dept_no, r.name, baselineKeys),
           };
         });
     });

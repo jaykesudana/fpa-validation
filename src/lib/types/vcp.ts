@@ -32,6 +32,8 @@ export interface VcpValidationLineRow extends VcpLineRow {
   validatedCents: number;
   validatedDate: string;
   statusUpdate: string;
+  // Best-effort tag, not a guaranteed lineage — see resolveLineOrigin().
+  lineOrigin: 'baseline' | 'added';
 }
 
 export interface VcpEvidence {
