@@ -47,15 +47,28 @@ interface RawValidationRow extends RawRow {
   validated_cents: number;
   validated_date: string | null;
   status_update: string | null;
+  baseline_row_id: string | null;
 }
 
+// Migration 0004: validations uploaded from a workbook with the "Row ID (do
+// not edit)" column carry an EXACT baseline_row_id — a real FK to the
+// vcp_upload_rows this line was pre-filled from, validated at upload time.
+// That's authoritative whenever it's set; the heuristic below only covers
+// validations uploaded before that column existed (baseline_row_id is
+// null for every row on those) and genuinely hand-typed new rows.
+//
 // A "line" has no stable id across baseline → validation — vcp_validation_rows
 // only carries a validation_id and a row_no (a position, not an identity), so
-// there's no foreign key to match against directly. `dept_no` ("Dept #") is
-// the field the workbook exists to let a department assign for exactly this
-// purpose — tracking one line across versions — so it's the primary match
-// key; initiative + normalized name is the fallback for rows left blank.
-function lineKey(initiativeId: string, deptNo: string | null, name: string): string {
+// there's no foreign key to match against directly. Priority: (1) EE ID —
+// the field that specifically identifies an individual employee, the most
+// reliable signal for "is this the same person" and the reason this was
+// re-checked: Dept # alone false-matched a new row against an existing
+// baseline row (almost certainly a reused/copied Dept #); (2) Dept #, for
+// non-headcount lines (vendor, etc.) that don't carry an EE ID; (3)
+// initiative + normalized name, for rows with neither filled in.
+function lineKey(initiativeId: string, eeId: string, deptNo: string | null, name: string): string {
+  const trimmedEeId = eeId.trim();
+  if (trimmedEeId && trimmedEeId !== '-') return `ee::${initiativeId}::${trimmedEeId}`;
   const trimmedDeptNo = deptNo?.trim();
   if (trimmedDeptNo) return `deptno::${initiativeId}::${trimmedDeptNo}`;
   return `name::${initiativeId}::${name.trim().toLowerCase()}`;
@@ -123,7 +136,7 @@ export async function GET(req: Request) {
       validationIdsNeeded.length
         ? (sql`
             select r.validation_id as parent_id, r.row_no, r.initiative_id, vi.name as initiative_name, r.dept_no, r.name, r.category,
-                   r.ee_id, r.country, r.frequency, r.target_date, r.identified_cents, r.notes, r.status, r.validated_cents, r.validated_date, r.status_update
+                   r.ee_id, r.country, r.frequency, r.target_date, r.identified_cents, r.notes, r.status, r.validated_cents, r.validated_date, r.status_update, r.baseline_row_id
             from vcp_validation_rows r join vcp_initiatives vi on vi.id = r.initiative_id
             where r.validation_id = any(${validationIdsNeeded}::uuid[])
           ` as unknown as Promise<RawValidationRow[]>)
@@ -144,7 +157,8 @@ export async function GET(req: Request) {
     const baselineKeysByUploadId = new Map<string, Set<string>>();
     for (const r of baselineRows) {
       const set = baselineKeysByUploadId.get(r.parent_id) ?? new Set<string>();
-      set.add(lineKey(r.initiative_id, r.dept_no, r.name));
+      const eeId = r.ee_id == null ? '' : decryptField(r.ee_id);
+      set.add(lineKey(r.initiative_id, eeId, r.dept_no, r.name));
       baselineKeysByUploadId.set(r.parent_id, set);
     }
 
@@ -153,33 +167,43 @@ export async function GET(req: Request) {
       const baselineKeys = baselineKeysByUploadId.get(v.baseline_upload_id) ?? new Set<string>();
       return validationRows
         .filter((r) => r.parent_id === v.id)
-        .map((r) => ({
-          departmentId: deptId,
-          departmentName: dept?.name ?? deptId,
-          source: 'validation' as const,
-          version: `v${v.version}`,
-          versionState: v.state,
-          sourceFileName: v.file_name,
-          uploadedByName: v.uploaded_by_name,
-          uploadedAt: v.uploaded_at,
-          rowNo: r.row_no,
-          initiativeId: r.initiative_id,
-          initiativeName: r.initiative_name,
-          deptNo: r.dept_no ?? '',
-          name: r.name,
-          category: r.category,
-          eeId: r.ee_id == null ? '' : decryptField(r.ee_id),
-          country: r.country ?? '',
-          frequency: r.frequency,
-          targetDate: r.target_date ?? '',
-          identifiedCents: Number(r.identified_cents),
-          notes: r.notes ?? '',
-          status: r.status,
-          validatedCents: Number(r.validated_cents),
-          validatedDate: r.validated_date ?? '',
-          statusUpdate: r.status_update ?? '',
-          lineOrigin: (baselineKeys.has(lineKey(r.initiative_id, r.dept_no, r.name)) ? 'baseline' : 'added') as 'baseline' | 'added',
-        }));
+        .map((r) => {
+          const eeId = r.ee_id == null ? '' : decryptField(r.ee_id);
+          return {
+            departmentId: deptId,
+            departmentName: dept?.name ?? deptId,
+            source: 'validation' as const,
+            version: `v${v.version}`,
+            versionState: v.state,
+            sourceFileName: v.file_name,
+            uploadedByName: v.uploaded_by_name,
+            uploadedAt: v.uploaded_at,
+            rowNo: r.row_no,
+            initiativeId: r.initiative_id,
+            initiativeName: r.initiative_name,
+            deptNo: r.dept_no ?? '',
+            name: r.name,
+            category: r.category,
+            eeId,
+            country: r.country ?? '',
+            frequency: r.frequency,
+            targetDate: r.target_date ?? '',
+            identifiedCents: Number(r.identified_cents),
+            notes: r.notes ?? '',
+            status: r.status,
+            validatedCents: Number(r.validated_cents),
+            validatedDate: r.validated_date ?? '',
+            statusUpdate: r.status_update ?? '',
+            // Exact match (validated against the real baseline at upload
+            // time — see validations/route.ts) wins outright; only fall back
+            // to the heuristic when no Row ID was captured for this row.
+            lineOrigin: (r.baseline_row_id != null
+              ? 'baseline'
+              : baselineKeys.has(lineKey(r.initiative_id, eeId, r.dept_no, r.name))
+                ? 'baseline'
+                : 'added') as 'baseline' | 'added',
+          };
+        });
     });
 
     const fromBaseline = deptsWithBaseline.flatMap((d) => {

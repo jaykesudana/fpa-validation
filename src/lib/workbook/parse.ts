@@ -212,6 +212,7 @@ export function parseValidationRows(aoa: readonly unknown[][], initiatives: read
       validatedCents: parseAmountCents(cellByField['validatedAmount']),
       validatedDate: normalizeDate(cellByField['validatedDate']),
       statusUpdate: String(cellByField['statusUpdate'] ?? '').trim(),
+      baselineRowId: String(cellByField['baselineRowId'] ?? '').trim(),
     });
   }
 

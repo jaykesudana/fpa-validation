@@ -25,6 +25,11 @@ export interface ParsedValidationRow extends ParsedRowBase {
   validatedCents: number;
   validatedDate: string;
   statusUpdate: string;
+  // Echoes the "Row ID (do not edit)" column — the exporting vcp_upload_rows.id
+  // this line was pre-filled from, so a re-upload can be matched back to its
+  // exact baseline row rather than by Dept #/EE ID/name. Blank for a row the
+  // partner added by hand, or a file downloaded before this column existed.
+  baselineRowId: string;
 }
 
 export interface ParseOk<T> {

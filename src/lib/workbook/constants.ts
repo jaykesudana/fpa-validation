@@ -32,8 +32,12 @@ export const IDENTIFIED_HEADERS = [
   'Target date', 'Identified amount', 'Notes',
 ];
 
-export const VALIDATION_EXTRA_HEADERS = ['Status', 'Validated Amount', 'Validated Date', 'Status Update'];
+export const VALIDATION_EXTRA_HEADERS = ['Status', 'Validated Amount', 'Validated Date', 'Status Update', 'Row ID (do not edit)'];
 
 export const IDENTIFIED_COLUMN_WIDTHS = [22, 10, 30, 22, 10, 12, 12, 13, 15, 32];
-export const VALIDATION_COLUMN_WIDTHS = [22, 10, 30, 22, 10, 12, 12, 13, 15, 26, 13, 15, 14, 26];
+// Last column, "Row ID (do not edit)", is a system column: it lets a
+// re-upload be matched back to the exact baseline line it came from,
+// without depending on Dept #/EE ID/name staying unchanged (see
+// src/app/api/vcp/line-items/route.ts).
+export const VALIDATION_COLUMN_WIDTHS = [22, 10, 30, 22, 10, 12, 12, 13, 15, 26, 13, 15, 14, 26, 38];
 export const ALLOWED_VALUES_COLUMN_WIDTHS = [24, 24, 16, 16, 16];

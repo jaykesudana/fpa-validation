@@ -24,7 +24,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       sql`select name from departments where id = ${validation.department_id}` as unknown as Promise<{ name: string }[]>,
       sql`select id, name from vcp_initiatives where active = true order by sort_order` as unknown as Promise<Initiative[]>,
       sql`
-        select r.dept_no, r.name, vi.name as initiative_name, r.category, r.ee_id, r.country, r.frequency, r.target_date, r.identified_cents, r.notes, r.status, r.validated_cents, r.validated_date, r.status_update
+        select r.dept_no, r.name, vi.name as initiative_name, r.category, r.ee_id, r.country, r.frequency, r.target_date, r.identified_cents, r.notes, r.status, r.validated_cents, r.validated_date, r.status_update, r.baseline_row_id
         from vcp_validation_rows r join vcp_initiatives vi on vi.id = r.initiative_id
         where r.validation_id = ${validationId}
         order by r.row_no
@@ -44,6 +44,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
           validated_cents: number;
           validated_date: string | null;
           status_update: string | null;
+          baseline_row_id: string | null;
         }[]
       >,
     ]);
@@ -66,6 +67,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       validatedDollars: Number(r.validated_cents) / 100,
       validatedDate: r.validated_date ?? '',
       statusUpdate: r.status_update ?? '',
+      baselineRowId: r.baseline_row_id ?? '',
     }));
 
     const { fileName, workbook } = generateValidationWorkbook(deptName, allInitiatives, exportRows, `v${validation.version}`);

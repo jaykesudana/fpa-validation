@@ -84,6 +84,10 @@ export interface ValidationExportRow {
   validatedDollars: number | '';
   validatedDate: string;
   statusUpdate: string;
+  // The exporting vcp_upload_rows.id — echoed back on re-upload so a line
+  // can be matched to its exact baseline row (see line-items/route.ts),
+  // rather than by Dept #/EE ID/name, which can collide or change.
+  baselineRowId: string;
 }
 
 /**
@@ -102,7 +106,7 @@ export function generateValidationWorkbook(
     [...IDENTIFIED_HEADERS, ...VALIDATION_EXTRA_HEADERS],
     ...rows.map((r) => [
       r.initiativeName, r.deptNo, r.name, r.category, r.eeId, r.country, r.frequency, r.targetDate,
-      r.identifiedDollars, r.notes, r.status, r.validatedDollars, r.validatedDate, r.statusUpdate,
+      r.identifiedDollars, r.notes, r.status, r.validatedDollars, r.validatedDate, r.statusUpdate, r.baselineRowId,
     ]),
   ];
 

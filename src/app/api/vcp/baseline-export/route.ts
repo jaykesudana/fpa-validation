@@ -40,11 +40,12 @@ export async function GET(req: Request) {
     }
 
     const baseRows = (await sql`
-      select r.dept_no, r.name, vi.name as initiative_name, r.category, r.ee_id, r.country, r.frequency, r.target_date, r.identified_cents, r.notes
+      select r.id, r.dept_no, r.name, vi.name as initiative_name, r.category, r.ee_id, r.country, r.frequency, r.target_date, r.identified_cents, r.notes
       from vcp_upload_rows r join vcp_initiatives vi on vi.id = r.initiative_id
       where r.upload_id = ${upload.id}
       order by r.row_no
     `) as {
+      id: string;
       dept_no: string | null;
       name: string;
       initiative_name: string;
@@ -72,6 +73,7 @@ export async function GET(req: Request) {
       validatedDollars: '',
       validatedDate: '',
       statusUpdate: '',
+      baselineRowId: r.id,
     }));
 
     const { fileName, workbook } = generateValidationWorkbook(deptName, allInitiatives, rows, 'baseline');

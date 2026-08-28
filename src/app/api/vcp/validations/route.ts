@@ -55,15 +55,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: parsed.error, row: parsed.row }, { status: 422 });
     }
 
+    // The "Row ID (do not edit)" column echoes vcp_upload_rows.id — trust it
+    // only if it actually names a row of THIS baseline, so a stray/corrupted
+    // value (or one carried over from a different department's file by
+    // mistake) can't silently mismatch a line to someone else's baseline row.
+    const validBaselineRowIds = new Set(
+      (
+        (await sql`select id from vcp_upload_rows where upload_id = ${baseline.id}`) as unknown as { id: string }[]
+      ).map((r) => r.id),
+    );
+
     const validatedSubtotalCents = validatedSubtotal(parsed.rows);
     const rowInsertsFor = (validationId: string, rows: readonly ParsedValidationRow[]) =>
-      rows.map(
+      rows.map((r) => {
+        const baselineRowId = r.baselineRowId && validBaselineRowIds.has(r.baselineRowId) ? r.baselineRowId : null;
         // ee_id encrypted at rest — same rule as Gate 2's vcp_upload_rows.
-        (r) => sql`
-          insert into vcp_validation_rows (validation_id, row_no, initiative_id, dept_no, name, category, ee_id, country, frequency, target_date, identified_cents, notes, status, validated_cents, validated_date, status_update)
-          values (${validationId}, ${r.rowNo}, ${r.initiativeId}, ${r.deptNo || null}, ${r.name}, ${r.category}, ${r.eeId ? encryptField(r.eeId) : null}, ${r.country || null}, ${r.frequency}, ${mdyToISODate(r.targetDate)}, ${r.identifiedCents}, ${r.notes || null}, ${r.status}, ${r.validatedCents}, ${mdyToISODate(r.validatedDate)}, ${r.statusUpdate || null})
-        `,
-      );
+        return sql`
+          insert into vcp_validation_rows (validation_id, row_no, initiative_id, dept_no, name, category, ee_id, country, frequency, target_date, identified_cents, notes, status, validated_cents, validated_date, status_update, baseline_row_id)
+          values (${validationId}, ${r.rowNo}, ${r.initiativeId}, ${r.deptNo || null}, ${r.name}, ${r.category}, ${r.eeId ? encryptField(r.eeId) : null}, ${r.country || null}, ${r.frequency}, ${mdyToISODate(r.targetDate)}, ${r.identifiedCents}, ${r.notes || null}, ${r.status}, ${r.validatedCents}, ${mdyToISODate(r.validatedDate)}, ${r.statusUpdate || null}, ${baselineRowId})
+        `;
+      });
 
     // Written once, before the retry loop, so a retry never re-uploads the
     // same bytes under a second key — the DB rows across attempts all point

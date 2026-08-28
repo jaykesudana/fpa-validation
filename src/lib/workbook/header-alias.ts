@@ -33,7 +33,8 @@ export type FieldKey =
   | 'status'
   | 'validatedAmount'
   | 'validatedDate'
-  | 'statusUpdate';
+  | 'statusUpdate'
+  | 'baselineRowId';
 
 interface AliasRule {
   field: FieldKey;
@@ -42,6 +43,7 @@ interface AliasRule {
 
 export function buildAliasRules(gate: 2 | 3): AliasRule[] {
   return [
+    { field: 'baselineRowId', pattern: /row ?id/i },
     { field: 'statusUpdate', pattern: /status ?update/i },
     { field: 'validatedAmount', pattern: /validated ?amount/i },
     { field: 'validatedAmount', pattern: /validated ?\(/i },
