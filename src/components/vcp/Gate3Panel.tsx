@@ -8,6 +8,7 @@ import { fmtCents, fmtCentsSigned } from '@/lib/calc/format';
 import { useSession } from '@/lib/session-context';
 import { useToast } from '@/lib/toast-context';
 import type { VcpValidationVersion } from '@/lib/types/vcp';
+import { LineRowsModal } from './LineRowsModal';
 import { UploadDropzone } from './UploadDropzone';
 
 interface Props {
@@ -26,6 +27,7 @@ export function Gate3Panel({ deptId, fy, gateState, targetCents, validations, on
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [previewing, setPreviewing] = useState<VcpValidationVersion | null>(null);
 
   async function handleUpload(file: File) {
     const form = new FormData();
@@ -164,6 +166,9 @@ export function Gate3Panel({ deptId, fy, gateState, targetCents, validations, on
                   </td>
                   <td>
                     <div className="row">
+                      <button type="button" className="idc-btn idc-btn--ghost" onClick={() => setPreviewing(v)}>
+                        View rows
+                      </button>
                       <a className="idc-btn idc-btn--ghost" href={`/api/vcp/validations/${v.id}/export`}>
                         Download
                       </a>
@@ -210,6 +215,16 @@ export function Gate3Panel({ deptId, fy, gateState, targetCents, validations, on
             })}
           </tbody>
         </table>
+      )}
+
+      {previewing && (
+        <LineRowsModal
+          title={`v${previewing.version} · ${previewing.fileName}`}
+          subtitle={`${previewing.uploadedByName} · ${new Date(previewing.uploadedAt).toLocaleString()} · ${previewing.rowCount} rows`}
+          rows={previewing.rows}
+          variant="validation"
+          onClose={() => setPreviewing(null)}
+        />
       )}
     </div>
   );

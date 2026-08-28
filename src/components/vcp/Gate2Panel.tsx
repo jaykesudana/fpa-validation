@@ -8,6 +8,7 @@ import { fmtCents } from '@/lib/calc/format';
 import { useSession } from '@/lib/session-context';
 import { useToast } from '@/lib/toast-context';
 import type { VcpBaseline } from '@/lib/types/vcp';
+import { LineRowsModal } from './LineRowsModal';
 import { UploadDropzone } from './UploadDropzone';
 
 const IDENTIFIED_COLUMNS = ['Initiative', 'Name', 'Category', 'EE ID', 'Country', 'Frequency', 'Target date', 'Identified amount', 'Notes'];
@@ -26,6 +27,7 @@ export function Gate2Panel({ deptId, fy, gateState, baseline, onChanged }: Props
   const isAdmin = me?.user.role === 'admin';
   const [rejectNote, setRejectNote] = useState('');
   const [showReject, setShowReject] = useState(false);
+  const [showRows, setShowRows] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const rollup = useMemo(() => (baseline ? bucketRows(baseline.rows) : null), [baseline]);
@@ -120,6 +122,9 @@ export function Gate2Panel({ deptId, fy, gateState, baseline, onChanged }: Props
               </p>
             </div>
             <div className="row">
+              <button type="button" className="idc-btn idc-btn--ghost" onClick={() => setShowRows(true)}>
+                View rows
+              </button>
               <a className="idc-btn idc-btn--ghost" href={`/api/vcp/uploads/${baseline.id}/export`}>
                 Download
               </a>
@@ -217,6 +222,16 @@ export function Gate2Panel({ deptId, fy, gateState, baseline, onChanged }: Props
             </div>
           )}
         </>
+      )}
+
+      {showRows && baseline && (
+        <LineRowsModal
+          title={baseline.fileName}
+          subtitle={`${baseline.uploadedByName} · ${new Date(baseline.uploadedAt).toLocaleString()} · ${baseline.rowCount} rows`}
+          rows={baseline.rows}
+          variant="baseline"
+          onClose={() => setShowRows(false)}
+        />
       )}
     </div>
   );
