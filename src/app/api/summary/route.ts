@@ -32,10 +32,28 @@ interface InvRollupRow {
   pending_count: number;
 }
 
+interface InvByInitiativeDeptRow {
+  initiative_id: string | null;
+  department_id: string;
+  approved_cents: number;
+  pending_cents: number;
+  request_count: number;
+}
+
+interface VcpInitiativeFigures {
+  target: number;
+  identified: number;
+  delivered: number;
+}
+
 // GET /api/summary?fy=…&view=dept|initiative&group=all|rdi|sales|… — 05-API.md.
 // Read-only, never writes. `view` is advisory — both lenses are cheap once
 // the calc data is loaded, so both are always returned and the UI toggles
-// client-side without a second round trip.
+// client-side without a second round trip. Each group also carries its OWN
+// by-initiative breakdown (initiatives.vcp/inv, scoped to that group's
+// departments only) — added for the presentation export's per-group
+// appendix slides, which need "this group's initiatives," not just the
+// org-wide totals the top-level `initiatives` field already provided.
 export async function GET(req: Request) {
   try {
     const { user } = await requireScope();
@@ -66,7 +84,7 @@ export async function GET(req: Request) {
     const vcpVisibleIds = visibleDepts.filter((d) => vcpSet.has(d.id)).map((d) => d.id);
     const invVisibleIds = visibleDepts.filter((d) => invSet.has(d.id)).map((d) => d.id);
 
-    const [calcDepts, invRollupRows] = await Promise.all([
+    const [calcDepts, invRollupRows, vcpInitiatives, invInitiatives] = await Promise.all([
       loadDepartmentsForCalc(fy, vcpVisibleIds),
       invVisibleIds.length
         ? (sql`
@@ -74,6 +92,8 @@ export async function GET(req: Request) {
             from v_inv_dept_rollup where fiscal_year_id = ${fy} and department_id = any(${invVisibleIds}::text[])
           ` as unknown as Promise<InvRollupRow[]>)
         : Promise.resolve([] as InvRollupRow[]),
+      sql`select id, name from vcp_initiatives where active = true order by sort_order` as unknown as Promise<{ id: string; name: string }[]>,
+      sql`select id, name from inv_initiatives where active = true order by sort_order` as unknown as Promise<{ id: string; name: string }[]>,
     ]);
     const invRollupMap = new Map(invRollupRows.map((r) => [r.department_id, r]));
 
@@ -112,6 +132,71 @@ export async function GET(req: Request) {
       };
     });
 
+    // Per-department, per-initiative VCP figures — computed once, then
+    // aggregated two ways below: org-wide (all vcpVisibleIds) and per-group
+    // (just that group's dept ids). Avoids running the same calc-module
+    // lookups twice for the same department.
+    const vcpFiguresByDept = new Map<string, Map<string, VcpInitiativeFigures>>();
+    for (const deptId of vcpVisibleIds) {
+      const cd = calcDepts.get(deptId);
+      if (!cd) continue;
+      const perInitiative = new Map<string, VcpInitiativeFigures>();
+      for (const init of vcpInitiatives) {
+        const iv = cd.initiatives.find((i) => i.initiativeId === init.id);
+        perInitiative.set(init.id, {
+          target: iv ? iv.targetCents : 0,
+          identified: initCurrentIdentified(cd, init.id),
+          delivered: initValidated(cd, init.id),
+        });
+      }
+      vcpFiguresByDept.set(deptId, perInitiative);
+    }
+
+    function vcpInitiativeRowsFor(deptIds: readonly string[]) {
+      return vcpInitiatives.map((init) => {
+        let target = 0;
+        let identified = 0;
+        let delivered = 0;
+        for (const deptId of deptIds) {
+          const figures = vcpFiguresByDept.get(deptId)?.get(init.id);
+          if (!figures) continue;
+          target += figures.target;
+          identified += figures.identified;
+          delivered += figures.delivered;
+        }
+        return { name: init.name, target, identified, delivered, coverage: coverage(target, delivered) };
+      });
+    }
+
+    // Per-department, per-initiative investment figures — same idea as
+    // above, one query instead of the previous org-wide-only aggregate, so
+    // the same rows can be summed either org-wide or per-group.
+    const invByInitiativeDeptRows: InvByInitiativeDeptRow[] = invVisibleIds.length
+      ? ((await sql`
+          select initiative_id, department_id,
+                 sum(case when status = 'approved' then coalesce(approved_amount_cents, amount_cents) else 0 end) as approved_cents,
+                 sum(case when status in ('submitted', 'screened') then amount_cents else 0 end) as pending_cents,
+                 count(*) filter (where status in ('approved', 'submitted', 'screened', 'rejected')) as request_count
+          from inv_requests
+          where fiscal_year_id = ${fy} and department_id = any(${invVisibleIds}::text[])
+          group by initiative_id, department_id
+        `) as unknown as Promise<InvByInitiativeDeptRow[]>)
+      : [];
+
+    function invInitiativeRowsFor(deptIds: readonly string[]) {
+      const deptIdSet = new Set(deptIds);
+      const scoped = invByInitiativeDeptRows.filter((r) => deptIdSet.has(r.department_id));
+      return invInitiatives.map((init) => {
+        const rows = scoped.filter((r) => r.initiative_id === init.id);
+        return {
+          name: init.name,
+          approved: rows.reduce((s, r) => s + Number(r.approved_cents), 0),
+          pending: rows.reduce((s, r) => s + Number(r.pending_cents), 0),
+          requestCount: rows.reduce((s, r) => s + Number(r.request_count), 0),
+        };
+      });
+    }
+
     const groupNamesPresent = Array.from(new Set(deptRows.map((r) => r.summaryGroup)));
     const orderedGroupNames = [
       ...GROUP_ORDER.filter((g) => groupNamesPresent.includes(g)),
@@ -132,57 +217,23 @@ export async function GET(req: Request) {
         }),
         { target: 0, identified: 0, delivered: 0, invApproved: 0, invPending: 0, invApprovedCount: 0, invPendingCount: 0 },
       );
-      return { key: slug(name), name, rows, totals: { ...totals, coverage: coverage(totals.target, totals.delivered) } };
-    });
-
-    // By-initiative lens — scoped by the same visibleDepts as above.
-    const [vcpInitiatives, invInitiatives] = await Promise.all([
-      sql`select id, name from vcp_initiatives where active = true order by sort_order` as unknown as Promise<{ id: string; name: string }[]>,
-      sql`select id, name from inv_initiatives where active = true order by sort_order` as unknown as Promise<{ id: string; name: string }[]>,
-    ]);
-
-    const vcpInitiativeRows = vcpInitiatives.map((init) => {
-      let target = 0;
-      let identified = 0;
-      let delivered = 0;
-      for (const deptId of vcpVisibleIds) {
-        const cd = calcDepts.get(deptId);
-        if (!cd) continue;
-        const iv = cd.initiatives.find((i) => i.initiativeId === init.id);
-        if (iv) target += iv.targetCents;
-        identified += initCurrentIdentified(cd, init.id);
-        delivered += initValidated(cd, init.id);
-      }
-      return { name: init.name, target, identified, delivered, coverage: coverage(target, delivered) };
-    });
-
-    const invByInitiativeRows = invVisibleIds.length
-      ? ((await sql`
-          select initiative_id,
-                 sum(case when status = 'approved' then coalesce(approved_amount_cents, amount_cents) else 0 end) as approved_cents,
-                 sum(case when status in ('submitted', 'screened') then amount_cents else 0 end) as pending_cents,
-                 count(*) filter (where status in ('approved', 'submitted', 'screened', 'rejected')) as request_count
-          from inv_requests
-          where fiscal_year_id = ${fy} and department_id = any(${invVisibleIds}::text[])
-          group by initiative_id
-        `) as { initiative_id: string | null; approved_cents: number; pending_cents: number; request_count: number }[])
-      : [];
-    const invByInitiativeMap = new Map(invByInitiativeRows.map((r) => [r.initiative_id, r]));
-
-    const invInitiativeRows = invInitiatives.map((init) => {
-      const row = invByInitiativeMap.get(init.id);
+      const groupDeptIds = rows.map((r) => r.deptId);
       return {
-        name: init.name,
-        approved: row ? Number(row.approved_cents) : 0,
-        pending: row ? Number(row.pending_cents) : 0,
-        requestCount: row ? Number(row.request_count) : 0,
+        key: slug(name),
+        name,
+        rows,
+        totals: { ...totals, coverage: coverage(totals.target, totals.delivered) },
+        initiatives: {
+          vcp: vcpInitiativeRowsFor(groupDeptIds.filter((id) => vcpSet.has(id))),
+          inv: invInitiativeRowsFor(groupDeptIds.filter((id) => invSet.has(id))),
+        },
       };
     });
 
     return NextResponse.json({
       fiscalYear: fy,
       groups,
-      initiatives: { vcp: vcpInitiativeRows, inv: invInitiativeRows },
+      initiatives: { vcp: vcpInitiativeRowsFor(vcpVisibleIds), inv: invInitiativeRowsFor(invVisibleIds) },
     });
   } catch (err) {
     return toErrorResponse(err);
