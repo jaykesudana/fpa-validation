@@ -7,7 +7,6 @@ import { CoverageChip } from '@/components/ui/CoverageChip';
 import { api } from '@/lib/api-client';
 import { coverage } from '@/lib/calc/vcp';
 import { fmtCents } from '@/lib/calc/format';
-import { exportPresentationDeck } from '@/lib/export/presentation';
 import { useToast } from '@/lib/toast-context';
 
 interface SummaryDeptRow {
@@ -113,18 +112,39 @@ export default function SummaryPage() {
     if (!data) return;
     setExporting(true);
     try {
-      // Always the full "all groups" breadth, regardless of the tab
-      // currently selected on-screen — a presentation deck is meant to be
-      // the complete picture, not whatever narrow filter someone's looking
-      // at when they click Export. Otherwise scoped exactly like the page
-      // itself: only what this viewer's own department grants show them.
-      await exportPresentationDeck({
-        fiscalYearLabel: data.fiscalYear,
-        groups: data.groups,
-        vcpInitiatives: data.initiatives.vcp,
-        invInitiatives: data.initiatives.inv,
-        bucket,
+      // The deck is built server-side (pptxgenjs needs Node's fs/https, which
+      // can't be bundled for the browser) — this POSTs data already fetched
+      // above and downloads the binary it gets back. Always the full "all
+      // groups" breadth regardless of the tab currently selected on-screen —
+      // a presentation deck is meant to be the complete picture. Otherwise
+      // scoped exactly like the page itself: only what this viewer's own
+      // department grants already showed them.
+      const res = await fetch('/api/export/presentation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fiscalYearLabel: data.fiscalYear,
+          groups: data.groups,
+          vcpInitiatives: data.initiatives.vcp,
+          invInitiatives: data.initiatives.inv,
+          bucket,
+        }),
       });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}) as { error?: string });
+        throw new Error(errBody.error || `Export failed (${res.status})`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const disposition = res.headers.get('Content-Disposition') ?? '';
+      const match = /filename="([^"]+)"/.exec(disposition);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = match?.[1] ?? `IDC-Portfolio-Summary-${data.fiscalYear}.pptx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not build the presentation.', 'error');
     } finally {

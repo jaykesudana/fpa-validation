@@ -1,5 +1,17 @@
+import PptxGenJS from 'pptxgenjs';
 import { coverage } from '@/lib/calc/vcp';
 import { fmtCents } from '@/lib/calc/format';
+
+// Server-only — imports pptxgenjs statically, which pulls in node:fs/node:https
+// internally. A previous version of this module ran client-side and was
+// imported (even via dynamic import()) from src/app/page.tsx; webpack still
+// had to parse pptxgenjs's own module graph to build that chunk and failed
+// on the node: scheme. Building the deck in a Route Handler instead sidesteps
+// the problem entirely — Route Handlers are never bundled for the browser,
+// so pptxgenjs's Node-only paths are exactly where it's designed to run.
+// See src/app/api/export/presentation/route.ts (the only caller) and the
+// client-side trigger in src/app/page.tsx, which POSTs data it already has
+// and downloads the returned binary — no other file may import this one.
 
 // IDC brand tokens (src/styles/design-tokens.css), hex without '#' for pptxgenjs.
 const INK = '1D1D7F';
@@ -123,15 +135,14 @@ const ROOMY_MARGIN = [4, 8, 4, 8];
 const THIN_BORDER = { type: 'solid', pt: 0.5, color: BORDER };
 
 /**
- * Builds and downloads a 3-slide IDC-branded deck from data the Summary page
- * already has loaded — no server round trip. Slide 1: target/identified/
- * delivered/approved/in-flight by department. Slide 2: VCP by initiative.
- * Slide 3: Investment requests by initiative. Reflects whatever the calling
- * viewer can already see (seesV/seesI per row) — same scoping as every other
- * view in the app, not a separate export permission.
+ * Builds a 3-slide IDC-branded deck and returns it as a Buffer. Slide 1:
+ * target/identified/delivered/approved/in-flight by department. Slide 2: VCP
+ * by initiative. Slide 3: Investment requests by initiative. Reflects
+ * whatever the calling viewer could already see (seesV/seesI per row) —
+ * scoping happened client-side, when the data was fetched from /api/summary
+ * and /api/inv/bucket; this function just formats what it's given.
  */
-export async function exportPresentationDeck(input: PresentationDeckInput): Promise<void> {
-  const { default: PptxGenJS } = await import('pptxgenjs');
+export async function buildPresentationBuffer(input: PresentationDeckInput): Promise<Buffer> {
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_16x9';
 
@@ -280,6 +291,6 @@ export async function exportPresentationDeck(input: PresentationDeckInput): Prom
     border: THIN_BORDER,
   } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
-  const safeFy = input.fiscalYearLabel.replace(/[^a-zA-Z0-9-]+/g, '-');
-  await pptx.writeFile({ fileName: `IDC-Portfolio-Summary-${safeFy}.pptx` });
+  const out = await pptx.write({ outputType: 'nodebuffer' });
+  return out as unknown as Buffer;
 }
