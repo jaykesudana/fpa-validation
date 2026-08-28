@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/chrome/PageHeader';
 import { CoverageChip } from '@/components/ui/CoverageChip';
 import { GateChip } from '@/components/ui/GateChip';
 import { api } from '@/lib/api-client';
+import { coverage } from '@/lib/calc/vcp';
 import type { GateState } from '@/lib/calc/vcp';
 import { fmtCents } from '@/lib/calc/format';
 import { useSession } from '@/lib/session-context';
@@ -55,9 +56,40 @@ export default function VcpOverviewPage() {
     return order.map((l1) => ({ l1, rows: byL1.get(l1) ?? [] }));
   }, [data]);
 
+  const grandTotals = useMemo(
+    () =>
+      (data?.departments ?? []).reduce(
+        (acc, d) => ({ target: acc.target + d.target, identified: acc.identified + d.identified, delivered: acc.delivered + d.delivered }),
+        { target: 0, identified: 0, delivered: 0 },
+      ),
+    [data],
+  );
+
   return (
     <>
       <PageHeader eyebrow="Value Creation Plan" title="Savings by department" subtitle={data ? data.fiscalYear : undefined} />
+      {!loading && data && data.departments.length > 0 && (
+        <div className="kpi-strip">
+          <div className="kpi-group">
+            <div className="kpi-tile">
+              <p className="kpi-tile__label">Target</p>
+              <p className="kpi-tile__value">{fmtCents(grandTotals.target)}</p>
+            </div>
+            <div className="kpi-tile">
+              <p className="kpi-tile__label">Identified</p>
+              <p className="kpi-tile__value">{fmtCents(grandTotals.identified)}</p>
+            </div>
+            <div className="kpi-tile">
+              <p className="kpi-tile__label">Delivered</p>
+              <p className="kpi-tile__value">{fmtCents(grandTotals.delivered)}</p>
+            </div>
+            <div className="kpi-tile">
+              <p className="kpi-tile__label">Coverage</p>
+              <p className="kpi-tile__value">{Math.round(coverage(grandTotals.target, grandTotals.delivered) * 100)}%</p>
+            </div>
+          </div>
+        </div>
+      )}
       {isAdmin && (
         <div className="row" style={{ marginBottom: 16 }}>
           <Link href="/vcp/line-items" className="idc-btn idc-btn--ghost">

@@ -326,6 +326,18 @@ export default function LineItemsPage() {
     return sort.dir === 'desc' ? ordered.reverse() : ordered;
   }, [filteredRows, sort, COLUMNS]);
 
+  // Scorecards reflect whatever the column filters + tab currently leave
+  // visible — not a fixed grand total — so filtering down to one department
+  // or category shows that slice's own totals, not everything's.
+  const filteredTotals = useMemo(
+    () => ({
+      count: sortedRows.length,
+      identifiedCents: sortedRows.reduce((s, r) => s + r.identifiedCents, 0),
+      validatedCents: sortedRows.reduce((s, r) => s + (r.validatedCents ?? 0), 0),
+    }),
+    [sortedRows],
+  );
+
   function handleSort(key: string) {
     setSort((prev) => {
       if (!prev || prev.key !== key) return { key, dir: 'asc' };
@@ -377,6 +389,27 @@ export default function LineItemsPage() {
   return (
     <>
       <PageHeader eyebrow="Value Creation Plan" title="Line items — all departments" subtitle={data ? data.fiscalYear : undefined} />
+
+      {!loading && !error && (
+        <div className="kpi-strip">
+          <div className="kpi-group">
+            <div className="kpi-tile">
+              <p className="kpi-tile__label">Lines (filtered)</p>
+              <p className="kpi-tile__value">{filteredTotals.count}</p>
+            </div>
+            <div className="kpi-tile">
+              <p className="kpi-tile__label">Total identified</p>
+              <p className="kpi-tile__value">{fmtCents(filteredTotals.identifiedCents)}</p>
+            </div>
+            {sourceTab === 'validation' && (
+              <div className="kpi-tile">
+                <p className="kpi-tile__label">Total validated</p>
+                <p className="kpi-tile__value">{fmtCents(filteredTotals.validatedCents)}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="row--between" style={{ marginBottom: 16 }}>
         <div className="row" style={{ gap: 12 }}>
