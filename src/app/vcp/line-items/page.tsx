@@ -35,6 +35,7 @@ interface LineItem {
   validatedCents: number | null;
   validatedDate: string | null;
   statusUpdate: string | null;
+  lineOrigin: 'baseline' | 'added' | null;
 }
 
 interface LineItemsResponse {
@@ -97,6 +98,15 @@ const BASELINE_COLUMNS: Column[] = [
 const VALIDATION_COLUMNS: Column[] = [
   { key: 'department', label: 'Department', get: (r) => r.departmentName },
   { key: 'version', label: 'Version', get: (r) => r.version },
+  {
+    key: 'lineOrigin',
+    label: 'Origin',
+    // Matched against the specific baseline this validation version was
+    // built from (by "Dept #", falling back to initiative+name) — a
+    // best-effort tag, not a guaranteed lineage, since no stable id links a
+    // validation row back to a baseline row (see the route's `lineKey`).
+    get: (r) => (r.lineOrigin === 'added' ? 'Added since baseline' : r.lineOrigin === 'baseline' ? 'Baseline' : ''),
+  },
   { key: 'initiative', label: 'Initiative', get: (r) => r.initiativeName },
   { key: 'deptNo', label: 'Dept #', get: (r) => r.deptNo },
   { key: 'name', label: 'Line item', get: (r) => r.name },

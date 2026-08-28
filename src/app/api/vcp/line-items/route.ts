@@ -20,6 +20,7 @@ interface UploadRow {
 interface ValidationMetaRow {
   id: string;
   department_id: string;
+  baseline_upload_id: string;
   version: number;
   state: string;
   file_name: string;
@@ -48,6 +49,18 @@ interface RawValidationRow extends RawRow {
   status_update: string | null;
 }
 
+// A "line" has no stable id across baseline → validation — vcp_validation_rows
+// only carries a validation_id and a row_no (a position, not an identity), so
+// there's no foreign key to match against directly. `dept_no` ("Dept #") is
+// the field the workbook exists to let a department assign for exactly this
+// purpose — tracking one line across versions — so it's the primary match
+// key; initiative + normalized name is the fallback for rows left blank.
+function lineKey(initiativeId: string, deptNo: string | null, name: string): string {
+  const trimmedDeptNo = deptNo?.trim();
+  if (trimmedDeptNo) return `deptno::${initiativeId}::${trimmedDeptNo}`;
+  return `name::${initiativeId}::${name.trim().toLowerCase()}`;
+}
+
 // GET /api/vcp/line-items?fy=… — admin only. Not in 05-API.md; added per a
 // follow-up request for an org-wide, row-level oversight view. Originally
 // returned only ONE "current" source per department (latest validation, or
@@ -55,7 +68,11 @@ interface RawValidationRow extends RawRow {
 // request to surface Gate 2 (baseline) and Gate 3 (validation) rows
 // SEPARATELY and simultaneously — a department with both shows up under
 // both, tagged via `source`, so admins can compare rather than only seeing
-// whichever is "current".
+// whichever is "current". Validation rows also carry `lineOrigin`
+// ('baseline' | 'added') — whether that line existed in the SPECIFIC
+// baseline this validation was built from (vcp_validations.baseline_upload_id
+// — not necessarily whatever baseline is "current" now, if a newer one has
+// since superseded it) or was introduced during validation.
 export async function GET(req: Request) {
   try {
     const { user } = await requireScope({ role: 'admin' });
@@ -73,7 +90,7 @@ export async function GET(req: Request) {
         where fiscal_year_id = ${fy} and superseded_by is null and state in ('review', 'locked')
       ` as unknown as Promise<UploadRow[]>,
       sql`
-        select id, department_id, version, state, file_name, uploaded_by_name, uploaded_at
+        select id, department_id, baseline_upload_id, version, state, file_name, uploaded_by_name, uploaded_at
         from vcp_validations
         where fiscal_year_id = ${fy}
         order by department_id, version
@@ -94,7 +111,13 @@ export async function GET(req: Request) {
     // or not it also has a Gate 3 validation — the two sources are shown
     // side by side, not one superseding the other.
     const deptsWithBaseline = depts.filter((d) => uploadByDept.has(d.id));
-    const uploadIdsNeeded = deptsWithBaseline.map((d) => uploadByDept.get(d.id)!.id);
+    // Baseline rows are needed for two purposes that don't always point at
+    // the same upload: rendering the CURRENT baseline (deptsWithBaseline),
+    // and matching each validation against the specific baseline IT was
+    // built from (which may since have been superseded by a newer one).
+    const currentBaselineUploadIds = deptsWithBaseline.map((d) => uploadByDept.get(d.id)!.id);
+    const matchBaselineUploadIds = Array.from(latestValidationByDept.values()).map((v) => v.baseline_upload_id);
+    const uploadIdsNeeded = Array.from(new Set([...currentBaselineUploadIds, ...matchBaselineUploadIds]));
 
     const [validationRows, baselineRows] = await Promise.all([
       validationIdsNeeded.length
@@ -115,8 +138,19 @@ export async function GET(req: Request) {
         : Promise.resolve([] as RawRow[]),
     ]);
 
+    // One key-set per baseline upload, for matching — not per department,
+    // since a validation's own baseline_upload_id might not be whichever
+    // upload is "current" for that department right now.
+    const baselineKeysByUploadId = new Map<string, Set<string>>();
+    for (const r of baselineRows) {
+      const set = baselineKeysByUploadId.get(r.parent_id) ?? new Set<string>();
+      set.add(lineKey(r.initiative_id, r.dept_no, r.name));
+      baselineKeysByUploadId.set(r.parent_id, set);
+    }
+
     const fromValidation = Array.from(latestValidationByDept.entries()).flatMap(([deptId, v]) => {
       const dept = depts.find((d) => d.id === deptId);
+      const baselineKeys = baselineKeysByUploadId.get(v.baseline_upload_id) ?? new Set<string>();
       return validationRows
         .filter((r) => r.parent_id === v.id)
         .map((r) => ({
@@ -144,6 +178,7 @@ export async function GET(req: Request) {
           validatedCents: Number(r.validated_cents),
           validatedDate: r.validated_date ?? '',
           statusUpdate: r.status_update ?? '',
+          lineOrigin: (baselineKeys.has(lineKey(r.initiative_id, r.dept_no, r.name)) ? 'baseline' : 'added') as 'baseline' | 'added',
         }));
     });
 
@@ -176,6 +211,7 @@ export async function GET(req: Request) {
           validatedCents: null as number | null,
           validatedDate: null as string | null,
           statusUpdate: null as string | null,
+          lineOrigin: null as 'baseline' | 'added' | null,
         }));
     });
 
