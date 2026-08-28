@@ -180,7 +180,7 @@ export async function GET(req: Request) {
           from inv_requests
           where fiscal_year_id = ${fy} and department_id = any(${invVisibleIds}::text[])
           group by initiative_id, department_id
-        `) as unknown as Promise<InvByInitiativeDeptRow[]>)
+        `) as unknown as InvByInitiativeDeptRow[])
       : [];
 
     function invInitiativeRowsFor(deptIds: readonly string[]) {
